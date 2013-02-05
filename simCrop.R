@@ -128,9 +128,9 @@ simCrop.pixelParcel <- function(a, l=7) {
 
 
 # convert the pixelParcel object to a raster
-simCrop.pixelParcelToRaster <- function(a) {
+simCrop.pixelParcelToRaster <- function(a,x) {
   r <- raster(nrows= a$l * a$nsSection * 4, ncols=a$l * a$weSection * 4)
-  values(r) <- a$value[,'error']
+  values(r) <- a$value[,x]
 
   return(r)
 }
@@ -256,21 +256,26 @@ b <- simCrop.pixelParcel(a)
 # add on own to the value object in b
 b <- simCrop.objectOwner(b,p.own)
 
+# create a list of raster objects and simulated landscapes
+for(i in 1:10){
 
-x11()
-b <- simCrop.pixelParcelUpdate(b,p,K,.05)
-r1 <- simCrop.pixelParcelToRaster(b)
-plot(r1, main="t=1")
+  if( i == 1 ) {
+    b.list       <- list( simCrop.pixelParcelUpdate(b,p,K,.05) )
+    r.error.list <- list( simCrop.pixelParcelToRaster(b.list[[1]],'error') )
+  } 
+  else {
+    b.list[[i]]        <- simCrop.pixelParcelUpdate(b.list[[i-1]],p,K,.05)
+    r.error.list[[i]] <- simCrop.pixelParcelToRaster(b.list[[i]],'error')
+  } 
 
-x11()
-b <- simCrop.pixelParcelUpdate(b,p,K,.05)
-r2 <- simCrop.pixelParcelToRaster(b)
-plot(r2, main="t=2")
+  #x11()
+  #plot(r.error.list[[i]], main=sprintf("t=%d",i) )
+}
 
-x11()
-b <- simCrop.pixelParcelUpdate(b,p,K,.05)
-r3 <- simCrop.pixelParcelToRaster(b)
-plot(r3, main="t=3")
+r <- brick( unlist(r.error.list) )
+
+  x11()
+  plot(r)
 
 
 
