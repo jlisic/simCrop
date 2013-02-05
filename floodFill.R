@@ -1,110 +1,110 @@
 # this is a program to sequentially open a raster file row by row
 
-set.seed(0)
 
 library(raster)
 
 ## FUNCTIONS ##
 
-## we store our results in a list of c( VALUE, STOPINDEX)
-#getStarts <- function( x ) {
-#  for( j in 1:length( x ) ) {
-#    # get first row
-#    if( j == 1) {
-#      k = 1
-#      a <- list( c(x[j],j) )
-#    # for any other row that differs in category
-#    } else if ( a[[k]][1] != x[j] )  {
-#      k = k + 1 
-#      a[k] <- list( c(x[j],j) )
-#    }
-#  }
-#  return(a)
-#} 
-#
-#
-#
-#
-#
-#
 ### example to use as input
-x <- matrix( ceiling(4 * runif(12)), nrow=4, ncol=3 )
-r <- raster(x)
-#
-#i <- 1
-#oneRow <- getValues(r,i)
-#
-#b.old <- getStarts( oneRow )
-#
-#i = i + 1
-#oneRow <- getValues(r,i)
-#
-#b.current <- getStarts( oneRow )
+#set.seed(0)
+#x <- matrix( ceiling(4 * runif(12)), nrow=4, ncol=3 )
+#x[2,2] <- 4
+#r <- raster(x)
 
 
-nrow_r <- nrow(r)
-k <- 1
+floodFill.raster <- function(r) {
 
-Q <- c()
-# remember we are in a row major form 
-j <- ceiling( k / nrow(r) ) 
-i <-  ((k -1) %% nrow(r) ) + 1
-
-v.current <- v[1] # our current target value
-k.current <- k
-
-# get the max in left and right
-k <- k.current
-while( j >= 1) {
-      if( v[k] == v.current )  { 
-        k.min.current <- k 
-      } else { 
-        break 
+  # constants
+  nrow_r <- nrow(r)
+  ncol_r <- ncol(r)
+  ncell_r <- ncell(r)
+  
+  v <- as.matrix(getValues(r))   # values of the raster image
+  v.obj <- matrix(0,nrow=ncell(r),1) # ownership values we are making
+  
+  # get the initial position and derived values
+  startPoint <- 1
+  objNo <- 1
+  
+  while ( startPoint != 0 ) {
+    
+    Q <- startPoint
+    v.current <- v[startPoint,] # our current target value
+    
+    # we iterate until the queue is empty
+    while (length(Q) != 0) {
+    
+      k.current <- Q[1]  # get our initial position
+      Q <- Q[-1]         # update the queue
+    
+      # set our initial object number
+      
+      ## get the max in left and right
+    
+      # first we need to reset k.min.current and k.min.current
+      k.min.current <- 0
+      k.max.current <- 0
+  
+      k.row.current <- ceiling(k.current / ncol_r)
+      
+      # left
+      k <- k.current
+      while( ceiling(k/ncol_r) == k.row.current    )  {
+            if( identical( v[k,], v.current ) && (v.obj[k] == 0) )  { 
+              k.min.current <- k 
+            } else { 
+              break 
+            }
+            
+            # update values
+            k <-  k - 1
+      #      j <- ceiling( k / nrow_r )    #column 
+      #      i <-  ((k -1) %% nrow_r ) + 1 #row
       }
       
-      #check down
-      if( i + 1 <= ncol_r ) 
-        if( v[k + nrow_r] == v.current ) {
-          Q <- c(Q,k + nrow_r)
-        }
-
-      #check up
-      if( i - 1 <= ncol_r ) 
-        if( v[k - nrow_r] == v.current ) {
-          Q <- c(Q,k - nrow_r)
-        }
-
-      # update values
-      k <-  k - 1
-      j <- ceiling( k / nrow_r )    #column 
-      i <-  ((k -1) %% nrow_r ) + 1 #row
-}
-
-k <- k.current
-while( j <= nrow_r ) { 
-      if (v[k] == v.current) & (j <= nrow_r ) { 
-        k.max.current <- k 
-      } else { 
+      # right
+      k <- k.current
+      while( ceiling(k/ncol_r) == k.row.current    )  {
+            if( identical( v[k,], v.current ) && (v.obj[k] == 0) ) { 
+              k.max.current <- k 
+            } else { 
+              break
+            }
+      
+            k <-  k + 1
+      }
+      
+      # add our classified values if there are any to add
+      if( k.min.current > 0 ) v.obj[k.min.current:k.max.current] <- objNo
+   
+    
+      Q.high <- 
+          (k.min.current:k.max.current + ncol_r)[
+            ((k.min.current:k.max.current + ncol_r) <= ncell_r) &
+            ((k.min.current:k.max.current) > 0)
+          ]
+    
+      Q.low <- 
+          (k.min.current:k.max.current - ncol_r)[
+            ((k.min.current:k.max.current - ncol_r) >= 0) &
+            ((k.min.current:k.max.current) > 0)
+          ]
+       
+      #enqueue the new values
+      Q <- c(Q,Q.high,Q.low)
+    }
+  
+    # figure out the new start point
+    startPoint <- 0 
+    for(i in 1:ncell_r) 
+      if( v.obj[i] == 0) {
+        startPoint <- i
         break
       }
+      
+    # move to a new object
+    objNo <- objNo + 1
+  }
 
-      #check down
-      if( i + 1 <= ncol_r ) 
-        if( v[k + nrow_r] == v.current ) {
-          Q <- c(Q,k + nrow_r)
-        }
-
-      #check up
-      if( i - 1 <= ncol_r ) 
-        if( v[k - nrow_r] == v.current ) {
-          Q <- c(Q,k - nrow_r)
-        }
-
-
-
-      k <-  k + 1
-      j <- ceiling( k / nrow_r )    #column 
-      i <-  ((k -1) %% nrow_r ) + 1 #row
+  return( v.obj )
 }
-
-# now let's go up and down
