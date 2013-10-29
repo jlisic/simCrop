@@ -37,51 +37,142 @@ hq2qq <- function( a, w ) {
 
 
 # This function returns a mapping of PLSS quarter-quarter sections to quarter-quarter half-quarter and quarter sections
-simCrop.partitionPLSS <- function( nsSection=1, weSection=1, landRatioOfQuarterQuarterSections=.50 ,landRatioOfHalfQuarterSections=.25){
+simCrop.partitionPLSS <- function( nsSection=1, weSection=1, landRatioOfQuarterQuarterSections=1 ,landRatioOfHalfQuarterSections=0){
 #nsSection=1
 #weSection=1
 #landRatioOfQuarterQuarterSections=.50 
 #landRatioOfHalfQuarterSections=.25
-
-
-
 
   # we first start off with establishing the number of quarter sections, and the number
   # of these sections that need to be converted into smaller units
 
   qsCount <- nsSection * weSection * 4 
 
+  # get how many quarter sections to partition
   partitionQSCount <- floor( (landRatioOfHalfQuarterSections + landRatioOfQuarterQuarterSections) * qsCount ) 
+  # figure out which quarter sections to partition
   partitionQS <- sample(1:qsCount, size=partitionQSCount)
 
   # create a ref map for QQS -> QS 
   useAsQS <- (1:qsCount)[!(1:qsCount %in% partitionQS)]
   useAsQS <- q2hq(useAsQS)
   useAsQS <- hq2qq(useAsQS, 4 * weSection)
-  
+ 
   refAsQS <- rep(useAsQS[1:(length(useAsQS)/4)],times=4)
 
+  # if we don't need to partition any thing we just skip the partitioning.
+  if( partitionQSCount > 0 ) {
 
-  #now turn partitionQS into HQS
-  partitionHQS <- q2hq(partitionQS)
+    #now turn partitionQS into HQS
+    partitionHQS <- q2hq(partitionQS)
+  
+    #get our HQS
+    partitionHQSCount <- floor( landRatioOfHalfQuarterSections / (landRatioOfHalfQuarterSections + landRatioOfQuarterQuarterSections) * partitionQSCount*2)
+  
+  
+    useAsHQS <- sample(partitionHQS, size=partitionHQSCount)
+    useAsQQS <- partitionHQS[!(partitionHQS %in% useAsHQS)]
+  
+    useAsHQS <- hq2qq(useAsHQS, 4 * weSection)
+    useAsQQS <- hq2qq(useAsQQS, 4 * weSection)
+    refAsHQS <- rep(useAsHQS[1:(length(useAsHQS)/2)],times=2)
+    refAsQQS <- useAsQQS
+  
+    # map to return
+    myMap <- c()
+  
+    if( length(useAsQS) > 0 ) {
+      myMap <-  cbind(refAsQS, useAsQS) 
+    }
+    if( length(useAsHQS) > 0 ) {
+      myMap <-  rbind( myMap ,cbind(refAsHQS, useAsHQS) )
+    }
+    if( length(useAsQQS) > 0 ) {
+      myMap <-  rbind( myMap ,cbind(refAsQQS, useAsQQS) )
+    }
 
-  #get our HQS
-  partitionHQSCount <- floor( landRatioOfHalfQuarterSections / (landRatioOfHalfQuarterSections + landRatioOfQuarterQuarterSections) * partitionQSCount*2)
+  } else {
+    myMap <- c()
+  
+    if( length(useAsQS) > 0 ) {
+      myMap <-  cbind(refAsQS, useAsQS) 
+    }
 
+  }
 
-  useAsHQS <- sample(partitionHQS, size=partitionHQSCount)
-  useAsQQS <- partitionHQS[!(partitionHQS %in% useAsHQS)]
-
-  useAsHQS <- hq2qq(useAsHQS, 4 * weSection)
-  useAsQQS <- hq2qq(useAsQQS, 4 * weSection)
-  refAsHQS <- rep(useAsHQS[1:(length(useAsHQS)/2)],times=2)
-  refAsQQS <- useAsQQS
-
-  myMap <- rbind( cbind(refAsQS, useAsQS), cbind(refAsHQS, useAsHQS), cbind(refAsQQS,useAsQQS) ) 
   colnames(myMap) <- c('object','qs')
 
   return( list( map=myMap, nsSection=nsSection, weSection=weSection) ) 
 
+}
+
+
+# this is a function that gets the spatial neighbors
+# for input this takes an object of type simCrop
+simCrop.getNeighbors <- function( x ) { 
+
+  we  <- x$weSection
+  ns  <- x$nsSection
+  qqs <- x$map[,'qs']
+
+  # 1. since the qqs relationships are known for a specified QS we start with getting those
+
+  y <- matrix(0,nrow=length(qqs),ncol=4)
+
+  y.index <- ( qqs %% ( we * 4 ) ) != 1
+  y[y.index,1] <- qqs[y.index] -1
+
+  y.index <- ( qqs %% ( we * 4 ) ) != 0
+  y[y.index,2] <- qqs[y.index] +1
+
+  y.index <- ( qqs /  ( we * 4 ) ) > 1
+  y[y.index,3] <- qqs[y.index] - we * 4
+  
+  y.index <- ( qqs /  ( we * 4 ) ) <= (ns * 4 - 1) 
+  y[y.index,4] <- qqs[y.index] + we * 4
+
+  # 2. now we add our results on to myMap
+  
+ 
+  myMap <- cbind( x$map, y ) 
+  
+  colnames(myMap) <- c('object','qs','w.neighbor', 'e.neighbor','s.neighbor','n.neighbor')
+ 
+  # add our results to the matrix 
+  x$neighbors <- myMap
+
+  return(x)
+}
+
+
+#This function creates a rook distance matrix from a neighbors matrix
+simCrop.createRookDist <- function( x,fun=max ) {
+
+  myNeighbors <- x$neighbors
+
+  qsIndex <- sort(myNeighbors[,'qs'],index.return=T)$ix
+
+  myObjects <- x$neighbors[,'object']
+  myObjects.sorted <- myObjects[qsIndex]
+
+
+  W.init <- apply(myNeighbors,1, function(x) {
+        W.init <- matrix(0,nrow=1,ncol=nrow(myNeighbors))
+        W.init[ c(x[3:6][x[3:6] > 0 ])] <- 1
+        return(W.init)
+    }
+  )
+
+  W <- aggregate( t(W.init), list( myObjects), fun )
+  rownames(W) <- W[,1] 
+  W <- W[,-1]
+  W <- aggregate( t(W), list( myObjects.sorted), fun )
+  rownames(W) <- W[,1] 
+  W <- as.matrix(W[,-1])
+
+  diag(W) <- 0
+
+  return( W )
 }
 
 

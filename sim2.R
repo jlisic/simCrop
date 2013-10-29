@@ -38,24 +38,24 @@ Beta.corn
 
 
 # initial probability of land use 
-p <- c(.05, .53, .37, .05)
+p <- c(.60, .40 )
 
 # p ownership
-p.own <- c(.8, .2)
+#p.own <- c(.8, .2)
 
-# Non-Ag, Corn , Soybeans, Other Ag
+p.own <- 1
 
-K1 <- matrix( c( .98, .005, .005, .01,
-                .01, .05,  .93,  .01,
-                .01, .97,  .02,  .01,
-                .01, .05,  .03,  .92),byrow=T,ncol=4) 
+# Corn Soybeans
+K1 <- matrix( c( .10, .90,
+                 .98, .02),byrow=T,ncol=2) 
 
-K2 <- matrix( c( .98, .005, .005, .01,
-                .01, .90,  .10,  .01,
-                .01, .50,  .50,  .01,
-                .01, .05,  .03,  .92),byrow=T,ncol=4) 
-
-K <- list(K1,K2)
+#K2 <- matrix( c( .98, .005, .005, .01,
+#                .01, .90,  .10,  .01,
+#                .01, .50,  .50,  .01,
+#                .01, .05,  .03,  .92),byrow=T,ncol=4) 
+#
+#
+#K <- list(K1,K2)
 
 
 
