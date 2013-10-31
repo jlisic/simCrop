@@ -146,7 +146,7 @@ simCrop.getNeighbors <- function( x ) {
 
 
 #This function creates a rook distance matrix from a neighbors matrix
-simCrop.createRookDist <- function( x,fun=max ) {
+simCrop.createRookDist <- function( x, fun=max ) {
 
   myNeighbors <- x$neighbors
 
@@ -233,16 +233,122 @@ simCrop.pixelParcelToRaster <- function(a,x) {
 }
 
 
+# if transitionMatrix = T then use the transition matrix, else
+# use the obs x length(transitionMatrix) matrix K
+simCrop.addRotation <- function(a,K,transitionMatrix=F) {
+  
+  myObjects <- unique(a$map[,'object']) 
+  myObjects.n <- length(myObjects)
+
+  if(transitionMatrix==T) {
+    K <- matrix( rep(c(t(K)),times=myObjects.n),byrow=T,nrow=myObjects.n) 
+  }
+
+  a$K <- cbind(myObjects,K) 
+
+  return(a)
+}
+
+simCrop.plotCropTypes <- function(a) {
+  
+  cropType <- a$cropType
+
+  objectIndex <- sort(cropType[,'myObjects'], index.return=T)$ix
+
+  crops <- cropType[objectIndex,-1]
+
+  m <- sqrt(nrow(crops))
+
+  for( i in 1:(ncol(crops) )) {
+    x11()
+    plot( raster( matrix(crops[,i],byrow=T,nrow=m))) 
+  }
+
+
+}
+
+
+# program that generates land cover type for objects in a simCrop object (this will be used by updates and pixel generation)  
+# this land cover generation will be appended to any prior generation
+# if K is provided, and a prior value exists the update will  based on the markov chain with transition matrix (K)
+simCrop.generateCropTypes <- function(a,p,K) {
+  
+  # get the unique objects
+  myObjects <- unique(a$map[,'object']) 
+
+  # K will not be provided for a new update
+  # and even if it is no update can be done without an initial value 
+  if( !missing(K) && !is.null(a$cropType) ) {
+  
+    x <- a$cropType
+
+    lastCol <- ncol(x)
+
+    # if not init update with the conditional distribution
+    p <- K[x[,lastCol],]
+
+    # for the case of a single object
+    if( is.null( nrow(p) ) ) {
+      p <- matrix(p,nrow=1)
+    }
+
+    cropType.n <- ncol(p)
+
+    a$cropType <- cbind( x, apply(p,1,function(x){ sample(1:cropType.n,size=1,prob=x) } )  )
+
+    cropType.n <- length(p)
+  
+  } else if (!missing(p) ) {
+    # if it's new or no K is provided we just use the provided p 
+
+    cropType.n <- length(p)
+    myObjects.n <- length(myObjects) 
+     
+    # select a primary crop
+    x <- sapply(1:myObjects.n, function(x) { sample(1:cropType.n,size=1,prob=p) } )
+
+    # append or add new
+    if( is.null( a$cropType) ) {
+      a$cropType <- cbind(myObjects, x) 
+    } else {
+      a$cropType <- cbind( a$cropType ,x) 
+    }
+ 
+  } else if( !is.null(a$K) && !is.null(a$cropType) ) {
+  
+    x <- a$cropType
+    K <- a$K[,-1]
+    cropType.n <- sqrt(ncol(K))  
+    lastCol <- ncol(x)
+
+    # if not init update with the conditional distribution
+    p <- t( apply( cbind( 1:nrow(x), x[,lastCol]) ,1, function(x) K[x[1], ((x[2]-1)*cropType.n + 1):(x[2]*cropType.n)] ) )
+
+    a$cropType <- cbind( x, apply(p,1,function(x){ sample(1:cropType.n,size=1,prob=x) } )  )
+
+    cropType.n <- length(p)
+  
+  } else {
+    print("Error: no p or K provided, not doing anything")
+  }
+
+  return(a) 
+}
+
+
+### DEPRECIATED ###
 # program that generates land cover type for a parcel
 generateCropTypes <- function(x,p,K) {
 
   n <- length(x)
 
+  cropTypes <- length(p)
+
   # if not init update with the conditional distribution
   if (x[1] != 0) p <- K[x[1],]
 
   # select a primary crop
-  cropType <- sample(1:4,size=1,prob=p)
+  cropType <- sample(1:cropTypes,size=1,prob=p)
 
   y <- rep(cropType,times=n)
 

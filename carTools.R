@@ -13,6 +13,7 @@ library(Matrix)
 
 ########################################## INCLUDES ###############################################
 source('mh.R')
+source('simCrop.R')
 
 
 
@@ -45,7 +46,7 @@ carTools.checkRho <- function(W, rho) {
   # if rho is missing we return the scalar range of rho
   W.eigen.values <- eigen(W)$values
 
-  return( sort( 1/range(W.eigen.valuesvalues) ) )
+  return( sort( 1/range(W.eigen.values) ) )
 }
 
 
@@ -184,4 +185,71 @@ probitGibbsSpatial <- function(Y,X,W,fieldSize,Beta.init,lambda.init,Beta0,Sigma
   
   return( list( Beta = Beta.save, lambda = lambda.save) )
 }
+
+
+carTools.deviates <- function( rho, W, X, Beta) {
+  n <- nrow(X)
+  if( is.null(n) ) n <- length(X)
+
+  if( !is.null(nrow(rho)) ) { 
+    L <- chol(diag(n) - rho %*% W) 
+    Y <-  L %*% X %*% Beta - rho %*% W %*% L %*% rnorm(n) 
+  } else {
+    L <- chol(diag(n) - rho * W ) 
+    Y <-  L %*% X %*% Beta - rho * W %*% L %*% rnorm(n) 
+  }
+  return(Y)
+}
+
+
+carTools.generateCropTypes <- function(a, p, rho, X, Beta) {
+
+  if( !missing(p) ) {
+    return( simCrop.generateCropTypes(a.neighbors,p) )
+  }
+
+  if( is.null(a$neighbors) ) {
+    # figure out which QQS are neighbors 
+    print("No neighbors exist, assuming rook (shared edge)")
+    a <- simCrop.getNeighbors(a)
+  }
+
+  # create the distance matrix for a
+  W <- simCrop.createRookDist(a)
+  
+  # W is sorted by object, so we need to sort our input by object
+  myObjects <- a$map[,'object']
+  myObjects.sortIndex <- sort( myObjects, index.return=T)
+  myObjects.sort <-myObjects.sortIndex$x
+  myObjects.sortIndex <-myObjects.sortIndex$ix
+  # this gives us a way to un-sort the result
+  myObjects.unsortIndex <- sort(myObjects.sortIndex, index.return=T)$ix
+
+  # handle missing X and Beta
+  n <- length(myObjects)
+  if( missing(X) ) {
+    X <- matrix(1,nrow=n,ncol=1)
+    Beta <- list()
+    for(i in 1:length(rho) ) Beta[[i]] <- rep(0,times=length(rho)) 
+  }
+
+  X.sort <- X[ myObjects.sortIndex,]
+  Y <- matrix(1,nrow=n,ncol=1)
+
+  for( i in 1:length(rho) ) {
+
+    priorState <- a$cropType[,'x'] == i 
+
+    if( sum(priorState) != 0 )  {
+      Y <- carTools.deviates( rho[[i]], W, X.sort, Beta[[i]] )
+      Y[priorState] <- (Y[myObjects.unsortIndex])[priorState] 
+    }
+   
+  }
+  # now we need to 
+  a$cropType <- cbind( a$cropType, 1 + (Y>0) )
+
+  return(a)
+}
+
 
