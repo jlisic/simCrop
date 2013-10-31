@@ -193,12 +193,14 @@ carTools.deviates <- function( rho, W, X, Beta) {
 
   if( !is.null(nrow(rho)) ) { 
     L <- chol(diag(n) - rho %*% W) 
-    Y <-  L %*% X %*% Beta - rho %*% W %*% L %*% rnorm(n) 
   } else {
     L <- chol(diag(n) - rho * W ) 
-    Y <-  L %*% X %*% Beta - rho * W %*% L %*% rnorm(n) 
   }
-  return(Y)
+
+  if(is.null(nrow(Beta))) Beta <- matrix(Beta,ncol=1)
+  if(is.null(nrow(X)))    X <- matrix(X,ncol=1)
+
+  return(  L %*% ( X %*% Beta + t(L) %*% L %*% rnorm(n) )  )
 }
 
 
