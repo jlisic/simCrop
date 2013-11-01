@@ -52,7 +52,7 @@ Sigma0.corn <- 10
 Sigma0.soy <- 10
 Sigma0 <- list( Sigma0.corn, Sigma0.soy)
 
-iter <- 1000
+iter <- 250 
 
 result <- carTools.probitGibbsSpatial(a.crops,Beta.init,rho.init,Beta0,Sigma0,iter)
 

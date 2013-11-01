@@ -35,24 +35,24 @@ mh.lambda <- function(Z,W,x0,iter,burnIn=50, lambda.range) {
 
   x <- x0
   sigma.inv.x <- diag(n) - x * W 
-  sigma.x <- solve(sigma.inv.x) 
+  det.sigma.x <- 1/det(sigma.inv.x) 
 
   # iterations for metropolis hastings algorithm
   for(i in 1:(iter + burnIn) ) {
     y <- runif(1, min=lambda.range[1],max=lambda.range[2]) 
     sigma.inv.y <- diag(n) - y * W 
-    sigma.y <- solve(sigma.inv.y) 
+    det.sigma.y <- 1/det(sigma.inv.y) 
 
     u <- runif(1)
 
     #rho <- min( foo(y) /  foo(x), 1 ) 
-    rho2 <- ( sqrt(det(sigma.x)) / sqrt(det(sigma.y )) ) * exp( -1/2 * ( t(Z) %*% sigma.inv.y %*% Z - t(Z) %*% sigma.inv.x %*% Z ) )  
+    rho2 <- ( sqrt(det.sigma.x) / sqrt(det.sigma.y ) ) * exp( -1/2 * ( t(Z) %*% sigma.inv.y %*% Z - t(Z) %*% sigma.inv.x %*% Z ) )  
     rho <- min( rho2, 1 )
 
     if (u < rho) {
       x <- y
       sigma.inv.x <- sigma.inv.y
-      sigma.x <- sigma.y 
+      det.sigma.x <- det.sigma.y 
     }
 
 

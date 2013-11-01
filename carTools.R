@@ -121,10 +121,9 @@ carTools.probitGibbsSpatial <- function( a, Beta.init, lambda.init, beta0,Sigma0
   # take care of Y
   Y <- a$cropType[,-1]
   Y <- Y[myObjects.sort,]
-  Y <- matrix( Y, ncol=1)
   
   # take care of X
-  X <- matrix(1,nrow=nrow(Y),ncol=1)
+  X <- matrix(1,nrow=nrow(Y)*(ncol(Y) - 1),ncol=1)
     
   W <- simCrop.createRookDist(a)
   
@@ -132,16 +131,23 @@ carTools.probitGibbsSpatial <- function( a, Beta.init, lambda.init, beta0,Sigma0
 
   result <- list() 
   for( i in 1:length(Beta.init) ) { 
+
+    Y.change <- Y
+    Y.change[,-1][!(Y.change==i)[,-ncol(Y.change)]] <- 0 
+    Y.change <- Y.change[,-1] - 1
+
+    Y.change <- matrix(Y.change,ncol=1)
+
     result[[i]] <- probitGibbsSpatial(
-                                      Y,
+                                      Y.change,
                                       X,
                                       W,
-                                      fieldSize,
                                       Beta.init[[i]],
                                       lambda.init[[i]],
                                       Beta0[[i]],
                                       Sigma0[[i]],
                                       iter) 
+    print( sprintf("Finished Running %d",i) )
   } 
   return( result)
 }
@@ -153,15 +159,15 @@ carTools.probitGibbsSpatial <- function( a, Beta.init, lambda.init, beta0,Sigma0
 # W matrix in row major form of spatial neighborhoods, dim is fieldSize x fieldSize
 # fieldSize, number of observations in a given year
 #  
-probitGibbsSpatial <- function(Y,X,W,fieldSize,Beta.init,lambda.init,Beta0,Sigma0,iter) {
+probitGibbsSpatial <- function(Y,X,W,Beta.init,lambda.init,Beta0,Sigma0,iter) {
 
   # set initial conditions
   Beta <- Beta.init
   lambda <- lambda.init 
 
   #init some values
-  m <- nrow(Y)     # number of observations over all years
-  K <- m/fieldSize # the number of years
+  m <- nrow(Y)     # number of observations
+  K <- m / nrow(W)
   p <- ncol(X)     # number of covariates
 
   Beta.save <- c()
@@ -183,6 +189,8 @@ probitGibbsSpatial <- function(Y,X,W,fieldSize,Beta.init,lambda.init,Beta0,Sigma
 
   # the mcmc loop
   for(i in 1:iter) {
+    print( sprintf("Z Generation %d ", i) )
+    last.time <- proc.time()
  
     means <- X %*% Beta + lambda * W.big %*% (Z - X %*% Beta )
 
@@ -198,9 +206,13 @@ probitGibbsSpatial <- function(Y,X,W,fieldSize,Beta.init,lambda.init,Beta0,Sigma
       
       means <- X %*% Beta + lambda * W.big %*% (Z - X %*% Beta )
     }
+    print( proc.time() - last.time)  
 
     if( T ) { 
     #XZ <- t(X) %*% (Z - lambda * W.big %*% (Z - X %*% Beta) ) 
+      print( sprintf("Beta Generation %d ", i) )
+      last.time <- proc.time()
+
       XZ <- t(X) %*% Sigma.inv %*%  Z  
   
       # this is Albert / Chib Beta sqiggle 
@@ -209,12 +221,15 @@ probitGibbsSpatial <- function(Y,X,W,fieldSize,Beta.init,lambda.init,Beta0,Sigma
       # generate deviates for beta/mu
       Beta.save[i] <- rnorm(1,Beta.post.location, B )
       Beta <- Beta.save[i]
+      print( proc.time() - last.time)  
     }
 
     # generate lambda deviate
     if( T ) {
-    lambda.save[i] <- mh.lambda(Z - X %*% Beta,W.big,0,1,100,lambda.range )
-    lambda <- lambda.save[i] 
+      print( sprintf("Rho Generation %d ", i) )
+      lambda.save[i] <- mh.lambda(Z - X %*% Beta,W.big,0,1,100,lambda.range )
+      lambda <- lambda.save[i] 
+      print( proc.time() - last.time)  
     }
   }
   
