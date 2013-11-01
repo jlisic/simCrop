@@ -8,9 +8,6 @@ source('carTools.R')
 # ratio of corn and soybeans
 p <- c(.6, .4)
 
-
-
-
 # create a 2x2 section set of quarter-quarter sections (QQS)
 a <- simCrop.partitionPLSS(2,2)
 
@@ -39,13 +36,23 @@ for(i in 1:10) {
 }
 
 ## probit Gibbs function ## 
-# Y vector of categorical responses in row major form, repeating for each year, length = (number of years) x fieldSize
-# X matrix of covariates  in row major form, repeating for each year, length = (number of years) x fieldSize
-# W matrix in row major form of spatial neighborhoods, dim is fieldSize x fieldSize
-# fieldSize, number of observations in a given year
+Beta.init.corn <- 0
+Beta.init.soy <- 0
+Beta.init <- list( Beta.init.corn, Beta.init.soy)
 
-X.car 
+rho.init.corn <- 0
+rho.init.soy <- 0
+rho.init <- list( rho.init.corn, rho.init.soy )
 
+Beta0.corn <- 0
+Beta0.soy <- 0
+Beta0 <- list( Beta0.corn, Beta0.soy)
 
-#probitGibbsSpatial <- function(Y,X,W,fieldSize,Beta.init,lambda.init,Beta0,Sigma0,iter) {
+Sigma0.corn <- 10
+Sigma0.soy <- 10
+Sigma0 <- list( Sigma0.corn, Sigma0.soy)
+
+iter <- 1000
+
+result <- carTools.probitGibbsSpatial(a.crops,Beta.init,rho.init,Beta0,Sigma0,iter)
 

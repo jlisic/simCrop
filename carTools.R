@@ -112,6 +112,41 @@ carTools.probitGibbs <- function(y,X,Beta,Beta0,Sigma0,iter) {
 }
 
 
+carTools.probitGibbsSpatial <- function( a, Beta.init, lambda.init, beta0,Sigma0, iter ) {
+
+
+  myObjects <- a$cropType[,'myObjects']
+  myObjects.sort <- sort( myObjects, index.return=T)$ix
+  
+  # take care of Y
+  Y <- a$cropType[,-1]
+  Y <- Y[myObjects.sort,]
+  Y <- matrix( Y, ncol=1)
+  
+  # take care of X
+  X <- matrix(1,nrow=nrow(Y),ncol=1)
+    
+  W <- simCrop.createRookDist(a)
+  
+  fieldSize <- nrow(W)
+
+  result <- list() 
+  for( i in 1:length(Beta.init) ) { 
+    result[[i]] <- probitGibbsSpatial(
+                                      Y,
+                                      X,
+                                      W,
+                                      fieldSize,
+                                      Beta.init[[i]],
+                                      lambda.init[[i]],
+                                      Beta0[[i]],
+                                      Sigma0[[i]],
+                                      iter) 
+  } 
+  return( result)
+}
+
+
 ## probit Gibbs function ## 
 # Y vector of categorical responses in row major form, repeating for each year, length = (number of years) x fieldSize
 # X matrix of covariates  in row major form, repeating for each year, length = (number of years) x fieldSize
@@ -178,7 +213,7 @@ probitGibbsSpatial <- function(Y,X,W,fieldSize,Beta.init,lambda.init,Beta0,Sigma
 
     # generate lambda deviate
     if( T ) {
-    lambda.save[i] <- mh.lambda(Z - X %*% Beta,W,0,1,100,lambda.range )
+    lambda.save[i] <- mh.lambda(Z - X %*% Beta,W.big,0,1,100,lambda.range )
     lambda <- lambda.save[i] 
     }
   }
