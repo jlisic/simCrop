@@ -112,7 +112,7 @@ carTools.probitGibbs <- function(y,X,Beta,Beta0,Sigma0,iter) {
 }
 
 
-carTools.probitGibbsSpatial <- function( a, Beta.init, lambda.init, beta0,Sigma0, iter ) {
+sarTools.probitGibbsSpatial <- function( a, Beta.init, lambda.init, beta0,Sigma0, iter ) {
 
 
   myObjects <- a$cropType[,'myObjects']
@@ -138,7 +138,7 @@ carTools.probitGibbsSpatial <- function( a, Beta.init, lambda.init, beta0,Sigma0
 
     Y.change <- matrix(Y.change,ncol=1)
 
-    result[[i]] <- probitGibbsSpatial(
+    result[[i]] <- sarTools.probitGibbsSpatialRun(
                                       Y.change,
                                       X,
                                       W,
@@ -146,7 +146,8 @@ carTools.probitGibbsSpatial <- function( a, Beta.init, lambda.init, beta0,Sigma0
                                       lambda.init[[i]],
                                       Beta0[[i]],
                                       Sigma0[[i]],
-                                      iter) 
+                                      iter,
+                                      10) 
     print( sprintf("Finished Running %d",i) )
   } 
   return( result)
@@ -159,114 +160,113 @@ carTools.probitGibbsSpatial <- function( a, Beta.init, lambda.init, beta0,Sigma0
 # W matrix in row major form of spatial neighborhoods, dim is fieldSize x fieldSize
 # fieldSize, number of observations in a given year
 #  
-probitGibbsSpatial <- function(Y,X,W,Beta.init,lambda.init,Beta0,Sigma0,iter) {
+sarTools.probitGibbsSpatialRun <- function(Y,X,W,Beta.init,rho.init,Beta0,Sigma0,iter,m) {
 
   # set initial conditions
   Beta <- Beta.init
-  lambda <- lambda.init 
-
+  rho <- rho.init 
   #init some values
-  m <- nrow(Y)     # number of observations
-  K <- m / nrow(W)
+  n <- nrow(Y)     # number of observations
+  K <- n / nrow(W)
   p <- ncol(X)     # number of covariates
 
   Beta.save <- c()
-  lambda.save <- c()
+  rho.save <- c()
 
   W.big <- kronecker(diag(K),W) 
+  rho.range <- sort( 1/range(eigen(W)$values) )
 
-  lambda.range <- sort( 1/range(eigen(W)$values) )
+  Z <- matrix(0,nrow=n,ncol=1) 
+  trunc.point <- Z
 
-  Z <- matrix(0,nrow=m,ncol=1) 
- 
   # inverse of the prior variance
-  B.star.inv <- solve(Sigma0^2)
+  T.inv <- diag(ncol(X)) / Sigma0^2
+  B.star.inv <- solve( t(X) %*% X + T.inv ) 
 
   # the mcmc loop
   for(i in 1:iter) {
-  
     print( sprintf("Lambda Update %d ", i) )
     last.time <- proc.time()
-  
-    Sigma.inv <- diag(m) - lambda * W.big
-    XX <-  t(X) %*% Sigma.inv %*% X
-    B <- (B.star.inv + XX )^-1
 
+    # Lambda update
+    Lambda.inv <- diag(n) - rho * W.big 
+    Sigma.inv <- t(Lambda.inv) %*% Lambda.inv
+  
+    # the usual X'X
+    
     print( proc.time() - last.time)  
     print( sprintf("Z Generation %d ", i) )
     last.time <- proc.time()
- 
-    means <- X %*% Beta + lambda * W.big %*% (Z - X %*% Beta )
+     
 
     # generate deviates for the latent variables
-    for( j in 1:m) {
-      if( Y[j] == 1) {
-        Z[j] <- rtnorm( 1, mean=means[j], sd=1 , lower=0) 
-      } else if( Y[j] == 0) {
-        Z[j] <- rtnorm( 1, mean=means[j], sd=1 , upper=0) 
-      } else {
-        Z[j] <- rnorm( 1, mean=means[j], sd=1) 
+    for( k in 1:m) {
+      for( j in 1:n) {
+        trunc.point[j] <- -1/sqrt(Sigma.inv[j,j]) * ( X[j] %*% Beta + (Sigma.inv[j,-j]/Sigma.inv[j,j]) %*% Z[-j]) 
+  
+        if( Y[j] == 1) {
+          Z[j] <- rtnorm( 1, lower=trunc.point[j], sd=1 ) 
+        } else if( Y[j] == 0) {
+          Z[j] <- rtnorm( 1, upper=trunc.point[j], sd=1 ) 
+        } else {
+          Z[j] <- rnorm( 1 ) 
+        }
+        
       }
-      
-      means <- X %*% Beta + lambda * W.big %*% (Z - X %*% Beta )
     }
     print( proc.time() - last.time)  
-
-    if( T ) { 
-    #XZ <- t(X) %*% (Z - lambda * W.big %*% (Z - X %*% Beta) ) 
+    opt.result <- optim( 0, sarCheck, X=X, Y=Z, Beta=Beta, W=W, lower=rho.range[1] + 0.0001, upper=rho.range[2] - 0.0001,method="Brent" )
+    print(opt.result)
+    if( F ) { 
       print( sprintf("Beta Generation %d ", i) )
       last.time <- proc.time()
 
-      XZ <- t(X) %*% Sigma.inv %*%  Z  
-  
-      # this is Albert / Chib Beta sqiggle 
-      Beta.post.location <- B %*% (B.star.inv %*% Beta0 + XZ )  
-    
+      B <- B.star.inv %*% (t(X) %*% Lambda.inv %*% Z  + T.inv %*% Beta0)  
+      
       # generate deviates for beta/mu
-      Beta.save[i] <- rnorm(1,Beta.post.location, B )
+      Beta.save[i] <- rnorm(1,B, B.star.inv )
       Beta <- Beta.save[i]
       print( proc.time() - last.time)  
+    } else {
+      Beta.save[1] <- Beta
     }
 
     # generate lambda deviate
     if( T ) {
       print( sprintf("Rho Generation %d ", i) )
-      lambda.save[i] <- mh.lambda(Z - X %*% Beta,W.big,0,1,100,lambda.range )
-      lambda <- lambda.save[i] 
+      rho.save[i] <- mh.lambda.sar(Z,W, X%*% Beta,0,1,100,rho.range )
+      rho <- rho.save[i] 
       print( proc.time() - last.time)  
     }
   }
   
-  return( list( Beta = Beta.save, lambda = lambda.save) )
+  return( list( Beta = Beta.save, rho = rho.save) )
 }
 
 
-carTools.deviates <- function( rho, W, X, Beta,m) {
+sarTools.deviates <- function( rho, W, X, Beta) {
   n <- nrow(X)
   if( is.null(n) ) n <- length(X)
 
+
   if( !is.null(nrow(rho)) ) { 
-    L <- chol(diag(n) - rho %*% W) 
+    Lambda <- (diag(n) - rho %*% W)
   } else {
-    L <- chol(diag(n) - rho * W ) 
+    Lambda <- (diag(n) - rho * W)
   }
+ 
+  Lambda.inv <- solve(Lambda)
+
+  print( sprintf( "%d - %f",i,rho) )
 
   if(is.null(nrow(Beta))) Beta <- matrix(Beta,ncol=1)
   if(is.null(nrow(X)))    X <- matrix(X,ncol=1)
 
-  Y <- matrix(0,nrow=n,ncol=1)
-
-  for( j in 1: m ) {
-    for( i in 1:n) {
-      Y[i] <- X[i,] %*% Beta -  rho * W[i,-i] %*%( Y[-i] - X[-i,] %*% Beta ) + rnorm(1)
-    }
-  }
-
-  return(  Y  )  
+  return( solve(Lambda) %*% X %*% Beta + Lambda %*% rnorm(n) ) 
 }
 
 
-carTools.generateCropTypes <- function(a, p, rho, X, Beta) {
+sarTools.generateCropTypes <- function(a, p, rho, X, Beta) {
 
   if( !missing(p) ) {
     return( simCrop.generateCropTypes(a.neighbors,p) )
@@ -286,6 +286,7 @@ carTools.generateCropTypes <- function(a, p, rho, X, Beta) {
   myObjects.sortIndex <- sort( myObjects, index.return=T)
   myObjects.sort <-myObjects.sortIndex$x
   myObjects.sortIndex <-myObjects.sortIndex$ix
+
   # this gives us a way to un-sort the result
   myObjects.unsortIndex <- sort(myObjects.sortIndex, index.return=T)$ix
 
@@ -305,7 +306,7 @@ carTools.generateCropTypes <- function(a, p, rho, X, Beta) {
     priorState <- a$cropType[,'x'] == i 
 
     if( sum(priorState) != 0 )  {
-      Y <- carTools.deviates( rho[[i]], W, X.sort, Beta[[i]],10 )
+      Y <- sarTools.deviates( rho[[i]], W, X.sort, Beta[[i]] )
       Y[priorState] <- (Y[myObjects.unsortIndex])[priorState] 
     }
    
@@ -315,5 +316,21 @@ carTools.generateCropTypes <- function(a, p, rho, X, Beta) {
 
   return(a)
 }
+
+
+
+sarCheck <- function( rho, Y, X, Beta, W ) {
+
+  n <- nrow(W)
+
+  Lambda <- diag(n) - rho * W
+  Z <- Lambda %*% Y - X %*% Beta  
+
+  return( -1 * (log(det(Lambda))    -1/2 * t(Z) %*% Z )) 
+
+}
+
+
+
 
 

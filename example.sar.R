@@ -1,5 +1,5 @@
 
-source('carTools.R')
+source('sarTools.R')
 
 # In this example we are considering just two crops
 # 1. corn
@@ -17,8 +17,8 @@ a.init <- simCrop.getNeighbors(a.init)
 W <- simCrop.createRookDist(a.init) 
 
   # parameters for the CAR model
-rhoFromCorn   <- min( carTools.checkRho( W ) ) + 0.0001
-rhoFromSoy    <- max( carTools.checkRho( W ) )
+rhoFromCorn   <- min( carTools.checkRho( W ) ) + 0.01
+rhoFromSoy    <- max( carTools.checkRho( W ) ) - 0.01
 BetaFromCorn  <-  0 
 BetaFromSoy   <-  0 
 
@@ -32,8 +32,20 @@ X <- matrix(1,nrow=n,ncol=1)
 #simulate 10 years of data
 a.crops <- a.init
 for(i in 1:1) {
-  a.crops <- carTools.generateCropTypes(a.crops, rho=rho, X=X, Beta=Beta) 
+  a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, X=X, Beta=Beta) 
 }
+
+rhoRange <-carTools.checkRho(W) 
+result <- sarTools.probitGibbsSpatialRun( matrix(Y < 0,ncol=1), X,W, 0,0,0,3,10,10)
+print( mean(result$Beta) ) 
+print( mean(result$rho) )
+print( sd( result$rho) )
+
+Y <- sarTools.deviates( rhoFromCorn, W, X, BetaFromCorn) 
+opt.result <- optim( rhoFromCorn, sarCheck, X=X, Y=Y, Beta=BetaFromCorn, W=W, lower=rhoRange[1] + 0.0001, upper=rhoRange[2] - 0.0001,method="Brent" )
+print(opt.result)
+
+
 
 ## probit Gibbs function ## 
 Beta.init.corn <- 0
@@ -52,14 +64,14 @@ Sigma0.corn <- 10
 Sigma0.soy <- 10
 Sigma0 <- list( Sigma0.corn, Sigma0.soy)
 
-iter <- 2500 
+iter <- 1 
 
-result <- carTools.probitGibbsSpatial(a.crops,Beta.init,rho.init,Beta0,Sigma0,iter)
+result <- sarTools.probitGibbsSpatial(a.crops,Beta.init,rho.init,Beta0,Sigma0,iter)
 
 print( "corn")
-print( mean( result[[1]]$lambda) )
+print( mean( result[[1]]$rho) )
 print( mean( result[[1]]$Beta) )
 
 print( "soy")
-print( mean( result[[2]]$lambda) )
+print( mean( result[[2]]$rho) )
 print( mean( result[[2]]$Beta) )
