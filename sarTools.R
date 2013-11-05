@@ -153,6 +153,60 @@ sarTools.probitGibbsSpatial <- function( a, Beta.init, lambda.init, beta0,Sigma0
   return( result)
 }
 
+sarTools.gibbsSpatialRun <- function(Y,X,W,Beta.init,rho.init,Beta0,Sigma0,iter,m) {
+
+  # set initial conditions
+  Beta <- Beta.init
+  rho <- rho.init 
+  #init some values
+  n <- nrow(Y)     # number of observations
+  K <- n / nrow(W)
+  p <- ncol(X)     # number of covariates
+
+  Beta.save <- c()
+  rho.save <- c()
+
+  W.big <- kronecker(diag(K),W) 
+  rho.range <- sort( 1/range(eigen(W)$values) )
+
+  Z <- matrix(0,nrow=n,ncol=1) 
+  trunc.point <- Z
+
+  # inverse of the prior variance
+  T.inv <- diag(ncol(X)) / Sigma0^2
+  B.star.inv <- solve( t(X) %*% X + T.inv ) 
+
+  # the mcmc loop
+  for(i in 1:iter) {
+
+    # Lambda update
+    Lambda.inv <- diag(n) - rho * W.big 
+    Sigma.inv <- t(Lambda.inv) %*% Lambda.inv
+ 
+    # because we don't have latents 
+    Z <- Y 
+
+    if( F ) { 
+
+      B <- B.star.inv %*% (t(X) %*% Lambda.inv %*% Z  + T.inv %*% Beta0)  
+      
+      # generate deviates for beta/mu
+      Beta.save[i] <- rnorm(1,B, B.star.inv )
+      Beta <- Beta.save[i]
+      print( proc.time() - last.time)  
+    } else {
+      Beta.save[1] <- Beta
+    }
+
+    # generate lambda deviate
+    if( T ) {
+      rho.save[i] <- mh.lambda.sar(Z,W, X%*% Beta,0,1,100,rho.range )
+      rho <- rho.save[i] 
+    }
+  }
+  
+  return( list( Beta = Beta.save, rho = rho.save) )
+}
 
 ## probit Gibbs function ## 
 # Y vector of categorical responses in row major form, repeating for each year, length = (number of years) x fieldSize
@@ -185,58 +239,41 @@ sarTools.probitGibbsSpatialRun <- function(Y,X,W,Beta.init,rho.init,Beta0,Sigma0
 
   # the mcmc loop
   for(i in 1:iter) {
-    print( sprintf("Lambda Update %d ", i) )
-    last.time <- proc.time()
-
     # Lambda update
-    Lambda.inv <- diag(n) - rho * W.big 
-    Sigma.inv <- t(Lambda.inv) %*% Lambda.inv
+    Lambda <- diag(n) - rho * W.big 
+    Sigma.inv <- t(Lambda) %*% Lambda
   
-    # the usual X'X
-    
-    print( proc.time() - last.time)  
-    print( sprintf("Z Generation %d ", i) )
-    last.time <- proc.time()
-     
-
     # generate deviates for the latent variables
     for( k in 1:m) {
       for( j in 1:n) {
-        trunc.point[j] <- -1/sqrt(Sigma.inv[j,j]) * ( X[j] %*% Beta + (Sigma.inv[j,-j]/Sigma.inv[j,j]) %*% Z[-j]) 
-  
+        trunc.point[j] <-  X[j] %*% Beta - (Sigma.inv[j,-j]/Sigma.inv[j,j]) %*% Z[-j] 
+ 
+        Z.sd <- (Sigma.inv[j,j])^(-1/2)
+
         if( Y[j] == 1) {
-          Z[j] <- rtnorm( 1, lower=trunc.point[j], sd=1 ) 
+          Z[j] <- rtnorm( 1, mean=trunc.point[j], lower=0, sd=Z.sd ) 
         } else if( Y[j] == 0) {
-          Z[j] <- rtnorm( 1, upper=trunc.point[j], sd=1 ) 
+          Z[j] <- rtnorm( 1, mean=trunc.point[j], upper=0, sd=Z.sd ) 
         } else {
-          Z[j] <- rnorm( 1 ) 
+            Z[j] <- rnorm( 1, mean=trunc.point[j], sd=Z.sd ) 
         }
         
       }
     }
-    print( proc.time() - last.time)  
-    opt.result <- optim( 0, sarCheck, X=X, Y=Z, Beta=Beta, W=W, lower=rho.range[1] + 0.0001, upper=rho.range[2] - 0.0001,method="Brent" )
-    print(opt.result)
     if( F ) { 
-      print( sprintf("Beta Generation %d ", i) )
-      last.time <- proc.time()
-
       B <- B.star.inv %*% (t(X) %*% Lambda.inv %*% Z  + T.inv %*% Beta0)  
       
       # generate deviates for beta/mu
       Beta.save[i] <- rnorm(1,B, B.star.inv )
       Beta <- Beta.save[i]
-      print( proc.time() - last.time)  
     } else {
       Beta.save[1] <- Beta
     }
 
     # generate lambda deviate
     if( T ) {
-      print( sprintf("Rho Generation %d ", i) )
       rho.save[i] <- mh.lambda.sar(Z,W, X%*% Beta,0,1,100,rho.range )
       rho <- rho.save[i] 
-      print( proc.time() - last.time)  
     }
   }
   
@@ -247,23 +284,29 @@ sarTools.probitGibbsSpatialRun <- function(Y,X,W,Beta.init,rho.init,Beta0,Sigma0
 sarTools.deviates <- function( rho, W, X, Beta) {
   n <- nrow(X)
   if( is.null(n) ) n <- length(X)
-
-
-  if( !is.null(nrow(rho)) ) { 
-    Lambda <- (diag(n) - rho %*% W)
-  } else {
-    Lambda <- (diag(n) - rho * W)
-  }
- 
+  Lambda <- diag(n) - rho * W
   Lambda.inv <- solve(Lambda)
-
-  print( sprintf( "%d - %f",i,rho) )
-
+  print( sprintf( "Simulating with Beta=%f Rho=%f",Beta,rho) )
   if(is.null(nrow(Beta))) Beta <- matrix(Beta,ncol=1)
   if(is.null(nrow(X)))    X <- matrix(X,ncol=1)
 
-  return( solve(Lambda) %*% X %*% Beta + Lambda %*% rnorm(n) ) 
+  rhoRange <-carTools.checkRho(W) 
+  Y <- Lambda.inv %*% (X %*% Beta + rnorm(n)) 
+
+  print( sprintf( "MLE Beta=%f Rho=%f",Beta, 
+    optim( rho, sarCheck, Y=Y, W=W, X=X, Beta=Beta, lower=rhoRange[1] + 0.0001, upper=rhoRange[2] - 0.0001,method="Brent" )$par ))
+
+  return( Y ) 
 }
+
+sarTools.deviates.simple <- function( rho, W ) {
+  n <- nrow(W)
+  Lambda <- diag(n) - rho * W
+  Lambda.inv <- solve(Lambda)
+  print( sprintf( "Simulating with Beta=%f Rho=%f",0,rho) )
+  return( Lambda.inv %*% matrix(rnorm(n),ncol=1) ) 
+}
+
 
 
 sarTools.generateCropTypes <- function(a, p, rho, X, Beta) {
@@ -328,6 +371,14 @@ sarCheck <- function( rho, Y, X, Beta, W ) {
 
   return( -1 * (log(det(Lambda))    -1/2 * t(Z) %*% Z )) 
 
+}
+
+
+sarCheck.simple <- function( rho, Y, W ) {
+  n <- nrow(W)
+  Lambda <- diag(n) - rho * W
+  Z <- Lambda %*% Y   
+  return( -1 * (log(det(Lambda))    -1/2 * t(Z) %*% Z )) 
 }
 
 
