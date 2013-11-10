@@ -295,8 +295,8 @@ simCrop.generateCropTypes <- function(a,p,K) {
     cropType.n <- ncol(p)
 
     a$cropType <- cbind( x, apply(p,1,function(x){ sample(1:cropType.n,size=1,prob=x) } )  )
+    a$crops <-1:cropType.n
 
-    cropType.n <- length(p)
   
   } else if (!missing(p) ) {
     # if it's new or no K is provided we just use the provided p 
@@ -313,7 +313,9 @@ simCrop.generateCropTypes <- function(a,p,K) {
     } else {
       a$cropType <- cbind( a$cropType ,x) 
     }
- 
+
+    a$crops <-1:cropType.n
+
   } else if( !is.null(a$K) && !is.null(a$cropType) ) {
   
     x <- a$cropType
@@ -326,7 +328,7 @@ simCrop.generateCropTypes <- function(a,p,K) {
 
     a$cropType <- cbind( x, apply(p,1,function(x){ sample(1:cropType.n,size=1,prob=x) } )  )
 
-    cropType.n <- length(p)
+    a$crops <-1:cropType.n
   
   } else {
     print("Error: no p or K provided, not doing anything")

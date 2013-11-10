@@ -1,8 +1,3 @@
-#[1] "Simulating with Beta=0.000000 Rho=0.150000"
-#[1] "MLE Beta=0.000000 Rho=0.164480"
-#[1] "Simulating with Beta=0.000000 Rho=0.100000"
-#[1] "MLE Beta=0.000000 Rho=0.077363"
-#
 
 
 
@@ -15,6 +10,13 @@ source('sarTools.R')
 # ratio of corn and soybeans
 p <- c(.5, .5)
 
+# parameters 
+rho <- .15
+Beta.sim.corn  <-  -2 
+Beta.sim.soy   <-   2 
+Beta <- matrix( c( Beta.sim.corn, Beta.sim.soy),ncol=1)
+iter <- 1000 
+
 # create a 2x2 section set of quarter-quarter sections (QQS)
 a <- simCrop.partitionPLSS(4,4)
 
@@ -23,58 +25,46 @@ a.init <- simCrop.generateCropTypes(a,p)
 a.init <- simCrop.getNeighbors(a.init)
 W <- simCrop.createRookDist(a.init) 
 
-  # parameters for the CAR model
-#rhoFromCorn   <- min( carTools.checkRho( W ) ) + 0.01
-#rhoFromSoy    <- max( carTools.checkRho( W ) ) - 0.01
-
-rhoFromCorn <- .15
-rhoFromSoy <- .10
-
-BetaFromCorn  <-  0 
-BetaFromSoy   <-  0 
-
-rho <- list(rhoFromCorn,rhoFromSoy)
-Beta <- list( BetaFromCorn, BetaFromSoy)
-
-# add some simulated subsequent years
-n <- length(a$map[,'object'])
-X <- matrix(1,nrow=n,ncol=1)
-
-#simulate 10 years of data
+# simulate 10 years of data
 a.crops <- a.init
-for(i in 1:1) {
-  a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, X=X, Beta=Beta) 
+for(i in 1:10) {
+  a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, Beta=Beta) 
 }
 
+#
 rhoRange <-carTools.checkRho(W) 
+print(sprintf("The range of possible values for rho is (%f, %f)",rhoRange[1], rhoRange[2]))
+
 
 ## probit Gibbs function ## 
-Beta.init.corn <- 0
-Beta.init.soy <- 0
-Beta.init <- list( Beta.init.corn, Beta.init.soy)
+Beta.init.corn <- -2 
+Beta.init.soy <-   2
+Beta.init <- matrix( c(Beta.init.corn, Beta.init.soy), ncol=1) 
 
-rho.init.corn <- 0
-rho.init.soy <- 0
-rho.init <- list( rho.init.corn, rho.init.soy )
+rho.init <- .15 
 
 Beta0.corn <- 0
 Beta0.soy <- 0
-Beta0 <- list( Beta0.corn, Beta0.soy)
+Beta0 <- matrix( c(Beta0.corn, Beta0.soy), ncol=1)
 
-Sigma0.corn <- 10
-Sigma0.soy <- 10
-Sigma0 <- list( Sigma0.corn, Sigma0.soy)
+Sigma0.corn <- 3 
+Sigma0.soy <- 3 
+Sigma0 <- matrix( c(Sigma0.corn, Sigma0.soy), ncol=1)
 
-iter <- 400
+result <- sarTools.probitGibbsSpatial2(a.crops,Beta.init,rho.init,Beta0,Sigma0,iter,m=10,thinning=20,burnin=200)
 
-result <- sarTools.probitGibbsSpatial(a.crops,Beta.init,rho.init,Beta0,Sigma0,iter)
+#if ( T ) {
+#iter <- 100 
+#result <- sarTools.probitGibbsSpatial2(a.crops,Beta.init,rho.init,Beta0,Sigma0,iter,50)
+#print( "Beta")
+#print( colMeans( result$Beta ) )
+#print( apply( result$Beta ,2,sd ) )
+#
+#print( "Rho")
+#print( colMeans( result$rho ) )
+#print( sd( result$rho) )
 
-print( "corn")
-print( mean( result[[1]]$rho) )
-print( sd( result[[1]]$rho) )
-print( mean( result[[1]]$Beta) )
+#}
 
-print( "soy")
-print( mean( result[[2]]$rho) )
-print( sd( result[[2]]$rho) )
-print( mean( result[[2]]$Beta) )
+
+

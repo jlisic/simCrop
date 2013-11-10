@@ -6,7 +6,7 @@
 library(msm)  # for rtnorm
 library(mvtnorm)
 library(Matrix)
-
+library(mgcv)
 
 
 
@@ -112,46 +112,89 @@ carTools.probitGibbs <- function(y,X,Beta,Beta0,Sigma0,iter) {
 }
 
 
-sarTools.probitGibbsSpatial <- function( a, Beta.init, lambda.init, beta0,Sigma0, iter ) {
-
+sarTools.probitGibbsSpatial <- function( a, Beta.init, lambda.init, beta0,Sigma0, iter, m ) {
 
   myObjects <- a$cropType[,'myObjects']
   myObjects.sort <- sort( myObjects, index.return=T)$ix
-  
+  priorYears <- ncol( a$cropType) - 2  
+
   # take care of Y
-  Y <- a$cropType[,-1]
-  Y <- Y[myObjects.sort,]
+  Y <- matrix(a$cropType[,c(-1,-2)],ncol=priorYears)
   
+  Y.sort <- matrix(1:length(Y),ncol=priorYears)
+  Y.sort <- c(Y.sort[myObjects.sort,])
+  Y <- Y[Y.sort]
+  Y <- matrix(Y,ncol=1)
+
   # take care of X
-  X <- matrix(1,nrow=nrow(Y)*(ncol(Y) - 1),ncol=1)
-    
+  X <- matrix(sarTools.priorStateDesignMatrix(a),ncol=priorYears)
+  X <- X[ Y.sort, ]
+
+  # take care of W  
   W <- simCrop.createRookDist(a)
-  
   fieldSize <- nrow(W)
 
-  result <- list() 
-  for( i in 1:length(Beta.init) ) { 
+  X <<- X
+  Y <<- Y
 
-    Y.change <- Y
-    Y.change[,-1][!(Y.change==i)[,-ncol(Y.change)]] <- 0 
-    Y.change <- Y.change[,-1] - 1
-
-    Y.change <- matrix(Y.change,ncol=1)
-
-    result[[i]] <- sarTools.probitGibbsSpatialRun(
-                                      Y.change,
+  result <- sarTools.probitGibbsSpatialRun(
+                                      Y,
+                                      a$crops,
                                       X,
                                       W,
-                                      Beta.init[[i]],
-                                      lambda.init[[i]],
-                                      Beta0[[i]],
-                                      Sigma0[[i]],
+                                      Beta.init,
+                                      lambda.init,
+                                      Beta0,
+                                      Sigma0,
                                       iter,
-                                      10) 
-    print( sprintf("Finished Running %d",i) )
-  } 
+                                      m) 
   return( result)
 }
+
+sarTools.probitGibbsSpatial2 <- function( a, Beta.init, rho.init, beta0,Sigma0, iter, m,thinning,burnin ) {
+
+  require('spatialprobit')
+
+  myObjects <- a$cropType[,'myObjects']
+  myObjects.sort <- sort( myObjects, index.return=T)$ix
+  priorYears <- ncol( a$cropType) - 2  
+
+  # take care of Y
+  Y <- matrix(a$cropType[,c(-1,-2)],ncol=priorYears)
+  
+  Y.sort <- matrix(1:length(Y),ncol=priorYears)
+  Y.sort <- c(Y.sort[myObjects.sort,])
+  Y <- Y[Y.sort]
+  Y <- matrix(abs(Y-2),ncol=1) 
+  Y <<- Y
+
+  # take care of X
+  X <- sarTools.priorStateDesignMatrix(a)
+  X <- X[ Y.sort, ]
+  X <<- X
+
+  # take care of W  
+  W <- simCrop.createRookDist(a)
+  W.big <- kronecker(diag(priorYears),W) 
+  fieldSize <- nrow(W)
+
+
+  result <- sar_probit_mcmc(  
+                                      y=Y,
+                                      X=X,
+                                      W=as(W.big,"CsparseMatrix"),
+                                      ndraw=iter,
+                                      burn.in=burnin,
+                                      thinning=thinning,
+                                      # prior - Not Set, using diffuse
+                                      start= list( rho=rho.init, beta= Beta.init),
+                                      m=m,
+                                      showProgress=TRUE
+                                     ) 
+                                      
+  return( result)
+}
+
 
 sarTools.gibbsSpatialRun <- function(Y,X,W,Beta.init,rho.init,Beta0,Sigma0,iter,m) {
 
@@ -160,7 +203,7 @@ sarTools.gibbsSpatialRun <- function(Y,X,W,Beta.init,rho.init,Beta0,Sigma0,iter,
   rho <- rho.init 
   #init some values
   n <- nrow(Y)     # number of observations
-  K <- n / nrow(W)
+  K <- n / nrow(W) # number of years
   p <- ncol(X)     # number of covariates
 
   Beta.save <- c()
@@ -208,14 +251,19 @@ sarTools.gibbsSpatialRun <- function(Y,X,W,Beta.init,rho.init,Beta0,Sigma0,iter,
   return( list( Beta = Beta.save, rho = rho.save) )
 }
 
+
 ## probit Gibbs function ## 
 # Y vector of categorical responses in row major form, repeating for each year, length = (number of years) x fieldSize
 # X matrix of covariates  in row major form, repeating for each year, length = (number of years) x fieldSize
 # W matrix in row major form of spatial neighborhoods, dim is fieldSize x fieldSize
 # fieldSize, number of observations in a given year
 #  
-sarTools.probitGibbsSpatialRun <- function(Y,X,W,Beta.init,rho.init,Beta0,Sigma0,iter,m) {
+sarTools.probitGibbsSpatialRun <- function(Y,states,X,W,Beta.init,rho.init,Beta0,Sigma0,iter,m) {
 
+  Beta0 <- matrix(Beta0,ncol=1)
+  Sigma0 <- matrix(Sigma0,ncol=1)
+  Beta.n <- nrow(Beta0)
+  
   # set initial conditions
   Beta <- Beta.init
   rho <- rho.init 
@@ -224,8 +272,8 @@ sarTools.probitGibbsSpatialRun <- function(Y,X,W,Beta.init,rho.init,Beta0,Sigma0
   K <- n / nrow(W)
   p <- ncol(X)     # number of covariates
 
-  Beta.save <- c()
-  rho.save <- c()
+  Beta.save <- matrix(0,nrow=iter,ncol=length(Beta)) 
+  rho.save <- matrix(0,nrow=iter,ncol=1) 
 
   W.big <- kronecker(diag(K),W) 
   rho.range <- sort( 1/range(eigen(W)$values) )
@@ -234,49 +282,62 @@ sarTools.probitGibbsSpatialRun <- function(Y,X,W,Beta.init,rho.init,Beta0,Sigma0
   trunc.point <- Z
 
   # inverse of the prior variance
-  T.inv <- diag(ncol(X)) / Sigma0^2
+  T.inv <- diag( c(1/Sigma0^2) )
+  T.inv <<- T.inv
   B.star.inv <- solve( t(X) %*% X + T.inv ) 
+  B.star.inv.sqrt <- mroot(B.star.inv) # require mgcv
 
   # the mcmc loop
   for(i in 1:iter) {
+    print(i)
+    last.time <- proc.time()
     # Lambda update
     Lambda <- diag(n) - rho * W.big 
     Sigma.inv <- t(Lambda) %*% Lambda
   
     # generate deviates for the latent variables
+    Z <- matrix(0,nrow=n,ncol=1) 
     for( k in 1:m) {
       for( j in 1:n) {
-        trunc.point[j] <-  X[j] %*% Beta - (Sigma.inv[j,-j]/Sigma.inv[j,j]) %*% Z[-j] 
- 
-        Z.sd <- (Sigma.inv[j,j])^(-1/2)
 
-        if( Y[j] == 1) {
-          Z[j] <- rtnorm( 1, mean=trunc.point[j], lower=0, sd=Z.sd ) 
-        } else if( Y[j] == 0) {
-          Z[j] <- rtnorm( 1, mean=trunc.point[j], upper=0, sd=Z.sd ) 
-        } else {
-            Z[j] <- rnorm( 1, mean=trunc.point[j], sd=Z.sd ) 
-        }
+        Z.sd <- 1/sqrt(Sigma.inv[j,j])
         
-      }
-    }
-    if( F ) { 
-      B <- B.star.inv %*% (t(X) %*% Lambda.inv %*% Z  + T.inv %*% Beta0)  
-      
-      # generate deviates for beta/mu
-      Beta.save[i] <- rnorm(1,B, B.star.inv )
-      Beta <- Beta.save[i]
-    } else {
-      Beta.save[1] <- Beta
-    }
+        trunc.point[j] <-  (X[j,] %*% Beta - (Sigma.inv[j,-j]/Sigma.inv[j,j]) %*% Z[-j] )/ ( -1 * Z.sd ) 
 
+        if( Y[j] == states[1]) {
+          Z[j] <- rtnorm( 1, upper=trunc.point[j], sd=1 ) 
+        } else if( Y[j] == states[2] ) {
+          Z[j] <- rtnorm( 1, lower=trunc.point[j], sd=1 ) 
+        } else {
+          print( "Error:  Unknown State" )
+        }
+      }
+    
+      Z <- X %*% Beta + Z
+  
+      if( T ) { 
+        B <- B.star.inv %*% (t(X) %*% Lambda %*% Z  + T.inv %*% Beta0)  
+        
+        # generate deviates for beta/mu
+        Beta.save[i,] <- B + B.star.inv.sqrt %*% rnorm(Beta.n) 
+  
+        Beta <- matrix(Beta.save[i,],ncol=1)
+        print(Beta)
+      } else {
+        Beta.save <- t(Beta)
+      }
+
+    }
     # generate lambda deviate
     if( T ) {
-      rho.save[i] <- mh.lambda.sar(Z,W, X%*% Beta,0,1,100,rho.range )
-      rho <- rho.save[i] 
+      rho.save[i,] <- mh.lambda.sar(Z,W, X%*% Beta,0,1,100,rho.range )
+      rho <- rho.save[i,] 
+    } else {
+      rho.save <- t(rho)
     }
+    print(proc.time() - last.time)
   }
-  
+
   return( list( Beta = Beta.save, rho = rho.save) )
 }
 
@@ -291,13 +352,19 @@ sarTools.deviates <- function( rho, W, X, Beta) {
   if(is.null(nrow(X)))    X <- matrix(X,ncol=1)
 
   rhoRange <-carTools.checkRho(W) 
-  Y <- Lambda.inv %*% (X %*% Beta + rnorm(n)) 
+  epsilon <- rnorm(n)
+  Y <- Lambda.inv %*% (X %*% Beta + epsilon) 
 
-  print( sprintf( "MLE Beta=%f Rho=%f",Beta, 
+  Beta.hat <- solve( t(X) %*% X )  %*% t(X) %*% Lambda %*% Y 
+  print( sprintf( "MLE Beta=%f Rho=%f",Beta.hat, 
     optim( rho, sarCheck, Y=Y, W=W, X=X, Beta=Beta, lower=rhoRange[1] + 0.0001, upper=rhoRange[2] - 0.0001,method="Brent" )$par ))
 
   return( Y ) 
 }
+
+
+
+
 
 sarTools.deviates.simple <- function( rho, W ) {
   n <- nrow(W)
@@ -307,6 +374,27 @@ sarTools.deviates.simple <- function( rho, W ) {
   return( Lambda.inv %*% matrix(rnorm(n),ncol=1) ) 
 }
 
+
+sarTools.priorStateDesignMatrix <- function(a,priorYear) {
+  # get all the years of data we want
+  # note the first column is for object id 'myObjects'
+  # the last row is also not used
+  X <- a$cropType
+ 
+  if( missing(priorYear) ) { 
+    # number of years
+    n <- ncol(X) 
+    # create a column major form listing of prior years
+    py <- c(X[, c(-1,-n) ] )
+  } else {
+    # create a column major form listing of prior years
+    py <- c(X[, priorYear+1 ] )
+  }
+
+  # create design matrix
+  y <- rep(0,times=length(a$crops))
+  return( t(sapply(py,function(x) {y[x] = 1; return(y)}) ) )
+}
 
 
 sarTools.generateCropTypes <- function(a, p, rho, X, Beta) {
@@ -323,7 +411,10 @@ sarTools.generateCropTypes <- function(a, p, rho, X, Beta) {
 
   # create the distance matrix for a
   W <- simCrop.createRookDist(a)
-  
+
+  # get the number of years
+  years <- ncol(a$cropType) - 1 
+
   # W is sorted by object, so we need to sort our input by object
   myObjects <- a$map[,'object']
   myObjects.sortIndex <- sort( myObjects, index.return=T)
@@ -333,32 +424,24 @@ sarTools.generateCropTypes <- function(a, p, rho, X, Beta) {
   # this gives us a way to un-sort the result
   myObjects.unsortIndex <- sort(myObjects.sortIndex, index.return=T)$ix
 
-  # handle missing X and Beta
-  n <- length(myObjects)
+  priorState <- sarTools.priorStateDesignMatrix(a,priorYear=years)
+
+
   if( missing(X) ) {
-    X <- matrix(1,nrow=n,ncol=1)
-    Beta <- list()
-    for(i in 1:length(rho) ) Beta[[i]] <- rep(0,times=length(rho)) 
+    X <- priorState
+  } else {
+    X <- cbind(X,priorState)
   }
-
   X.sort <- X[ myObjects.sortIndex,]
-  Y <- matrix(1,nrow=n,ncol=1)
-
-  for( i in 1:length(rho) ) {
-
-    priorState <- a$cropType[,'x'] == i 
-
-    if( sum(priorState) != 0 )  {
-      Y <- sarTools.deviates( rho[[i]], W, X.sort, Beta[[i]] )
-      Y[priorState] <- (Y[myObjects.unsortIndex])[priorState] 
-    }
+  Y <- sarTools.deviates( rho, W, X.sort, Beta )
+  Y <- Y[ myObjects.unsortIndex,]
    
-  }
   # now we need to 
   a$cropType <- cbind( a$cropType, 1 + (Y>0) )
 
   return(a)
 }
+
 
 
 
