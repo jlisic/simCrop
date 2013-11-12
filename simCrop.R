@@ -249,22 +249,43 @@ simCrop.addRotation <- function(a,K,transitionMatrix=F) {
   return(a)
 }
 
-simCrop.plotCropTypes <- function(a) {
-  
-  cropType <- a$cropType
+simCrop.plotCropTypes <- function(a, years=0, error = F, useTransition=F ) {
 
+  crops <- list()
+
+  if( error == F) { 
+    cropType <- a$cropType
+  } else {
+    cropType <- a$globalError
+  }
   objectIndex <- sort(cropType[,'myObjects'], index.return=T)$ix
 
-  crops <- cropType[objectIndex,-1]
-
-  m <- sqrt(nrow(crops))
-
-  for( i in 1:(ncol(crops) )) {
-    x11()
-    plot( raster( matrix(crops[,i],byrow=T,nrow=m))) 
+  if( years[1] < 1 ) {
+    crops[[1]] <- cropType[objectIndex,-1]
+  } else { 
+    crops[[1]] <- cropType[objectIndex, years +1 ]
   }
 
+  if( useTransition == T ) {
+    crops <- simCrop.calcMCMLE.matrix(crops[[1]]) 
+  }
 
+  crops <<- crops
+
+  for(j in 1:length(crops) ) {
+
+    if( is.matrix(crops[[j]]) ) {
+      m <- sqrt(nrow(crops[[j]]))
+      for( i in 1:(ncol(crops[[j]]) )) {
+        x11()
+        plot( raster( matrix(crops[[j]][,i],byrow=T,nrow=m)),main=sprintf("Year = %d, Group= %d",i,j )) 
+      }
+    } else {
+      m <- sqrt(length(crops[[j]]))
+      x11()
+      plot( raster( matrix(crops[[j]],byrow=T,nrow=m)),main=sprintf("Year = %d, Group %d",1,j)) 
+    }
+  }
 }
 
 
@@ -436,5 +457,36 @@ simCrop.objectOwner <- function(b,p.own) {
 
   return(b)
 }
+
+
+
+simCrop.calcMCMLE.matrix  <- function( x ) {
+  n <- ncol(x)
+  unique.values <- sort(unique(c(x)))
+  print(unique.values)
+  result <- list()
+  j <- 1
+  for( i in unique.values) {
+    # get prior years
+    y <- x[,-1]*(x[,-1*n]==i)
+      result[[j]] <- 
+        t(apply(y,1,
+          function(z) { 
+            z.table <- table(z)
+            z.table.names <- as.numeric(names(z.table)) 
+            z.table.names.gt0 <- z.table.names[z.table.names > 0]
+            z.return <- rep(0,times=length(unique.values))
+            z.return[ unique.values %in% z.table.names.gt0] <- z.table[sprintf("%d",z.table.names.gt0)] 
+            z.return <- z.return / sum(z.return)
+            return(z.return)
+          }
+        )
+      )
+    j <- j + 1
+  }
+ return(result) 
+}
+
+
 
 

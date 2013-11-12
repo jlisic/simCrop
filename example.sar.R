@@ -1,6 +1,4 @@
-
-
-
+library(RPostgreSQL)
 source('sarTools.R')
 
 # In this example we are considering just two crops
@@ -8,17 +6,20 @@ source('sarTools.R')
 # 2. soybeans
 
 # ratio of corn and soybeans
-p <- c(.5, .5)
+p <- c(.6, .4)
 
 # parameters 
-rho <- .15
-Beta.sim.corn  <-  -2 
-Beta.sim.soy   <-   2 
+rho.global <- .20 
+rho <- -.15
+Beta.sim.corn  <- -1 
+Beta.sim.soy   <- 2 
 Beta <- matrix( c( Beta.sim.corn, Beta.sim.soy),ncol=1)
-iter <- 1000 
+iter <- 3 
+m <- 10
+q.value <- .5
 
 # create a 2x2 section set of quarter-quarter sections (QQS)
-a <- simCrop.partitionPLSS(4,4)
+a <- simCrop.partitionPLSS(1,1)
 
 # add initial crop assignment
 a.init <- simCrop.generateCropTypes(a,p)
@@ -26,45 +27,68 @@ a.init <- simCrop.getNeighbors(a.init)
 W <- simCrop.createRookDist(a.init) 
 
 # simulate 10 years of data
-a.crops <- a.init
-for(i in 1:10) {
-  a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, Beta=Beta) 
+a.crops <- sarTools.generateCropTypes(a.init, rho=rho, Beta=Beta, rho.global=rho.global, q.value=q.value) 
+for(i in 2:2) {
+  a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, Beta=Beta, q.value=q.value) 
 }
 
+print(a.crops$cropType)
+
+Beta.init <- c(-1,2)
+rho.init <- c( rho, rho.global)
+q.init <- q.value 
+beta0 <- c(0,0) 
+Sigma0 <- c(3,3) 
+
+# result
+result <- sarTools.probitGibbsSpatial( 
+  a.crops, 
+  Beta.init,
+  rho.init,
+  q.init,
+  beta0,
+  Sigma0,
+  iter,
+  m,
+  1,  # thinning
+  1   # burnIn
+  )
+
+
+
+
+if( F ) {
 #
 rhoRange <-carTools.checkRho(W) 
 print(sprintf("The range of possible values for rho is (%f, %f)",rhoRange[1], rhoRange[2]))
 
 
 ## probit Gibbs function ## 
-Beta.init.corn <- -2 
-Beta.init.soy <-   2
+Beta.init.corn <- 0 
+Beta.init.soy <-  0 
 Beta.init <- matrix( c(Beta.init.corn, Beta.init.soy), ncol=1) 
 
-rho.init <- .15 
-
-Beta0.corn <- 0
-Beta0.soy <- 0
-Beta0 <- matrix( c(Beta0.corn, Beta0.soy), ncol=1)
-
-Sigma0.corn <- 3 
-Sigma0.soy <- 3 
-Sigma0 <- matrix( c(Sigma0.corn, Sigma0.soy), ncol=1)
+rho.init <- 0 
 
 result <- sarTools.probitGibbsSpatial2(a.crops,Beta.init,rho.init,Beta0,Sigma0,iter,m=10,thinning=20,burnin=200)
+}
 
-#if ( T ) {
-#iter <- 100 
-#result <- sarTools.probitGibbsSpatial2(a.crops,Beta.init,rho.init,Beta0,Sigma0,iter,50)
-#print( "Beta")
-#print( colMeans( result$Beta ) )
-#print( apply( result$Beta ,2,sd ) )
-#
-#print( "Rho")
-#print( colMeans( result$rho ) )
-#print( sd( result$rho) )
 
-#}
 
+
+if( F) {
+# load driver for postgresql
+drv <- dbDriver("PostgreSQL")
+ 
+  con <- dbConnect( drv, host="10.0.1.2", dbname="edges", user="pgsql")
+
+  # write our results
+  dbWriteTable(con, name="results", value=x, overwrite=FALSE)
+
+  # get the result back
+  dbDisconnect(con)
+
+dbUnloadDriver(drv)
+}
 
 
