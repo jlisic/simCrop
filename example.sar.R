@@ -5,6 +5,7 @@ source('sarTools.R')
 # 1. corn
 # 2. soybeans
 
+
 # ratio of corn and soybeans
 p <- c(.6, .4)
 
@@ -14,9 +15,11 @@ rho <- -.15
 Beta.sim.corn  <- -1 
 Beta.sim.soy   <- 2 
 Beta <- matrix( c( Beta.sim.corn, Beta.sim.soy),ncol=1)
-iter <- 3 
+iter <- 10
 m <- 10
 q.value <- .5
+
+
 
 # create a 2x2 section set of quarter-quarter sections (QQS)
 a <- simCrop.partitionPLSS(1,1)
@@ -31,6 +34,11 @@ a.crops <- sarTools.generateCropTypes(a.init, rho=rho, Beta=Beta, rho.global=rho
 for(i in 2:2) {
   a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, Beta=Beta, q.value=q.value) 
 }
+
+
+# useful for debugging
+object.sort <- sort(a.crops$cropType[,'myObjects'],index.return=T)$ix
+Z <- c(a.crops$cropValue[object.sort,])
 
 print(a.crops$cropType)
 
@@ -55,7 +63,8 @@ result <- sarTools.probitGibbsSpatial(
   )
 
 
-
+print( "Beta Mean")
+print( Beta.post.var %*% ( t(Q) %*% Sigma.inv %*% Z ) )
 
 if( F ) {
 #
@@ -70,7 +79,7 @@ Beta.init <- matrix( c(Beta.init.corn, Beta.init.soy), ncol=1)
 
 rho.init <- 0 
 
-result <- sarTools.probitGibbsSpatial2(a.crops,Beta.init,rho.init,Beta0,Sigma0,iter,m=10,thinning=20,burnin=200)
+result.can <- sarTools.probitGibbsSpatial2(a.crops,Beta.init,rho.init,Beta0,Sigma0,iter,m=10,thinning=20,burnin=200)
 }
 
 

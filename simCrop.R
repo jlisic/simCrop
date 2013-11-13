@@ -1,6 +1,4 @@
 
-set.seed(1)
-
 library(raster)
 library(rgdal)
 library(clv)
