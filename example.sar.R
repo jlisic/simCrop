@@ -1,4 +1,4 @@
-library(RPostgreSQL)
+#library(RPostgreSQL)
 source('sarTools.R')
 
 # In this example we are considering just two crops
@@ -15,7 +15,9 @@ rho <- -.15
 Beta.sim.corn  <- -1 
 Beta.sim.soy   <- 2 
 Beta <- matrix( c( Beta.sim.corn, Beta.sim.soy),ncol=1)
-iter <- 10
+iter <- 130
+thinning <- 10
+burnIn <- 30
 m <- 10
 q.value <- .5
 
@@ -31,7 +33,7 @@ W <- simCrop.createRookDist(a.init)
 
 # simulate 10 years of data
 a.crops <- sarTools.generateCropTypes(a.init, rho=rho, Beta=Beta, rho.global=rho.global, q.value=q.value) 
-for(i in 2:2) {
+for(i in 2:5) {
   a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, Beta=Beta, q.value=q.value) 
 }
 
@@ -40,10 +42,8 @@ for(i in 2:2) {
 object.sort <- sort(a.crops$cropType[,'myObjects'],index.return=T)$ix
 Z <- c(a.crops$cropValue[object.sort,])
 
-print(a.crops$cropType)
-
-Beta.init <- c(-1,2)
-rho.init <- c( rho, rho.global)
+Beta.init <- c(0,0)
+rho.init <- c( 0, 0)
 q.init <- q.value 
 beta0 <- c(0,0) 
 Sigma0 <- c(3,3) 
@@ -58,13 +58,13 @@ result <- sarTools.probitGibbsSpatial(
   Sigma0,
   iter,
   m,
-  1,  # thinning
-  1   # burnIn
+  thinning,  # thinning
+  burnIn   # burnIn
   )
 
 
-print( "Beta Mean")
-print( Beta.post.var %*% ( t(Q) %*% Sigma.inv %*% Z ) )
+print( colMeans(result$Beta))
+print( colMeans(result$rho))
 
 if( F ) {
 #
@@ -85,19 +85,19 @@ result.can <- sarTools.probitGibbsSpatial2(a.crops,Beta.init,rho.init,Beta0,Sigm
 
 
 
-if( F) {
-# load driver for postgresql
-drv <- dbDriver("PostgreSQL")
- 
-  con <- dbConnect( drv, host="10.0.1.2", dbname="edges", user="pgsql")
-
-  # write our results
-  dbWriteTable(con, name="results", value=x, overwrite=FALSE)
-
-  # get the result back
-  dbDisconnect(con)
-
-dbUnloadDriver(drv)
-}
+#if( F) {
+## load driver for postgresql
+#drv <- dbDriver("PostgreSQL")
+# 
+#  con <- dbConnect( drv, host="10.0.1.2", dbname="edges", user="pgsql")
+#
+#  # write our results
+#  dbWriteTable(con, name="results", value=x, overwrite=FALSE)
+#
+#  # get the result back
+#  dbDisconnect(con)
+#
+#dbUnloadDriver(drv)
+#}
 
 

@@ -107,40 +107,74 @@ mh.lambda.sar <- function(Z,W,mu, x0,iter,burnIn=50, lambda.range) {
 }
 
 
-
-mh.lambda.sar2 <- function(Z,W,mu, x0,iter,burnIn=50, lambda.range, kronecker.products=list()) {
+# this function performs mh sampler on either rho1 or rho2, 
+mh.lambda.sar2 <- function(rho.which,rho,Z,W,Beta,q.value,iter,burnIn=50, rho.range) {
     
   n <- nrow(W)
-  N <- nrow(Z)/n
+  N <- nrow(Z)
+  K <- N/n
+   
+  rho1 <- rho[1]
+  rho2 <- rho[2]
+
+  M <- matrix(1, nrow=K,ncol=K) 
+
+  Lambda1.x <- diag(n) - rho1 * W
+  Lambda2.x <- diag(n) - rho2 * W
+
+  S1.x <- kronecker( diag(K), sqrt(q.value) * solve(Lambda1.x) )
+
+  Sigma1.x <- t(S1.x) %*% S1.x
+  Sigma2.x <- (1-q.value) * kronecker( M, solve( t(Lambda2.x) %*% Lambda2.x ) )
+
+  Sigma.x <- Sigma1.x + Sigma2.x
+  Sigma.inv.x <- solve(Sigma.x) 
+  Sigma.det.x <- det(Sigma.x)
+
+  Q.x <- S1.x %*% X 
+    
+  Z.adj.x <-  Z - Q.x %*%Beta 
+  Z.adj.y <- Z.adj.x # quick hack to help out the rho2 case 
 
   results <- 1:iter
 
-  x <- x0
-  Lambda.x <- diag(n) - x * W 
-  Sigma.inv <- Lambda.x
-  Lambda.x.det <- det(Lambda.x)
-
-  Z.adj.x <- matrix(Lambda.x %*% matrix(Z,nrow=n),ncol=1) - mu 
+  # set the initial value for what we want
+  x <- rho[rho.which]
 
   # iterations for metropolis hastings algorithm
   for(i in 1:(iter + burnIn) ) {
-    y <- runif(1, min=lambda.range[1],max=lambda.range[2]) 
-    Lambda.y <- diag(n) - y * W 
-    Lambda.y.det <- det(Lambda.y) 
-    Z.adj.y <- matrix(Lambda.y %*% matrix(Z,nrow=n),ncol=1) - mu 
- 
+    y <- runif(1, min=rho.range[1],max=rho.range[2]) 
+    
+    if(rho.which == 1) {
+      Lambda1.y <- diag(n) - y * W
+      S1.y <- kronecker( diag(K), sqrt(q.value) * solve(Lambda1.y) )
+      Sigma1.y <- t(S1.y) %*% S1.y
+      Sigma.y <- Sigma1.y + Sigma2.x
+      Q.y <- S1.y %*% X 
+      Z.adj.y <-  Z - Q.y %*%Beta 
+
+    } else {
+      Lambda2.y <- diag(n) - y * W 
+      Sigma2.y <- (1-q.value) * kronecker( M, solve( t(Lambda2.y) %*% Lambda2.y) )
+      Sigma.y <- Sigma1.x + Sigma2.y
+    }
+   
+
+    Sigma.inv.y <- solve(Sigma.y) 
+    Sigma.det.y <- det(Sigma.y) 
+    
     u <- runif(1)
 
-    det.part <- ( (Lambda.y.det) / (Lambda.x.det) )^(N)
+    det.part <- sqrt( (Sigma.det.x) / (Sigma.det.y) )
 
     #rho <- min( foo(y) /  foo(x), 1 ) 
-    rho2 <- det.part * exp( -1/2 * ( t(Z.adj.y) %*% Z.adj.y  - t(Z.adj.x) %*%  Z.adj.x ) )  
-    rho <- min( rho2, 1 )
+    alpha <- det.part * exp( -1/2 * ( t(Z.adj.y) %*% Sigma.inv.y %*%  Z.adj.y  - t(Z.adj.x) %*% Sigma.inv.x %*%  Z.adj.x ) )  
+    alpha <- min( alpha, 1 )
 
-    if (u < rho) {
+    if (u < alpha) {
       x <- y
-      Lambda.x <- Lambda.y
-      Lambda.x.det <- Lambda.y.det
+      Sigma.inv.x <- Sigma.inv.y
+      Sigma.det.x <- Sigma.det.y 
       Z.adj.x <- Z.adj.y
     }
 

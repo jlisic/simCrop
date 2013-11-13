@@ -301,7 +301,7 @@ sarTools.gibbsSpatialRun <- function(Y,X,W,Beta.init,rho.init,Beta0,Sigma0,iter,
 # W matrix in row major form of spatial neighborhoods, dim is fieldSize x fieldSize
 # fieldSize, number of observations in a given year
 #  
-sarTools.probitGibbsSpatialRunDouble <- function(Y,states,X,W,Beta.init,rho.init,q.init,Beta0,Sigma0,iter,m,thinning,burnin) {
+sarTools.probitGibbsSpatialRunDouble <- function(Y,states,X,W,Beta.init,rho.init,q.init,Beta0,Sigma0,iter,m,thinning,burnIn=0) {
   require(tmvtnorm)
 
   Beta0 <- matrix(Beta0,ncol=1)
@@ -339,71 +339,61 @@ sarTools.probitGibbsSpatialRunDouble <- function(Y,states,X,W,Beta.init,rho.init
 
   # inverse of the prior variance
   S.inv <- diag( c(1/Sigma0^2) )
+  last.time <- proc.time()
 
   # the mcmc loop
-  for(i in 1:iter) {
-    #print(i)
-    #last.time <- proc.time()
+  for(i in 1:(iter+burnIn) ) {
 
-    Lambda1 <- diag(n) - rho1 * W
-    Lambda2 <- diag(n) - rho2 * W 
-
-    S1 <- kronecker( diag(K), sqrt(q.value) * solve(Lambda1) )
-
-    Sigma1 <- t(S1) %*% S1
-    Sigma2 <- (1-q.value) * kronecker( M, solve( t(Lambda2) %*% Lambda2 ) )
-
-    Sigma <- Sigma1 + Sigma2
-    Sigma.inv <- solve(Sigma) 
-
-    Q <- S1 %*% X 
-
-    Q <<- Q
-    Sigma.inv <<- Sigma.inv
-    S.inv <<- S.inv
-    Sigma <<- Sigma
-    # first generate beta
-    # variance of the posterior distribution of Beta
-    Beta.post.var <- solve( S.inv + t(Q) %*% Sigma.inv %*% Q ) 
-    # mean of the posterior distribution of Beta
-    Beta.post.mean <- Beta.post.var %*% ( t(Q) %*% Sigma.inv %*% Z + S.inv %*% Beta0)
-
-    Beta.post.var <<- Beta.post.var
-    Beta.post.mean <<- Beta.post.mean
-
-    ## 1. generate new Beta
-    #Beta <- Beta.post.mean + Beta.post.var.root %*% rnorm( p ) 
-    Beta <- rmvnorm(n=1,mean=Beta.post.mean,sigma=Beta.post.var)
-    Beta.save[i,] <- Beta  # save our result
-    Beta <- matrix(Beta,ncol=1)
-
-    mu <- Q %*% Beta
-    #print( sprintf('mu: %f', mu))
-
-    # generate deviates for the latent variables
-    Z <- rtmvnorm( n=1, mean=c(mu), sigma=Sigma, lower=Y.lower, upper=Y.upper,algorithm="gibbsR",burn.in.samples=m)
-    Z <- matrix(Z,ncol=1)    
-
-    # generate rho deviate
-    if( T ) {
-      rho.save[i,] <- mh.lambda.sar2(Z,W, X%*% Beta,0,1,100,rho.range,kronecker.product=diag )
-      rho <- rho.save[i,] 
-    } else {
-      rho.save <- t(rho)
+    if(i %% 10 == 0) {
+      print(proc.time() - last.time)
+      print(i)
+      last.time <- proc.time()
     }
-#    
-#    # generate rho deviate global
-#    if( T ) {
-#      rho.save[i,] <- mh.lambda.sar2(Z,W,0,0,1,100,rho.range,kronecker.product=matrix(1,nrow=K,ncol=K))
-#      rho <- rho.save[i,] 
-#    } else {
-#      rho.save <- t(rho)
-#    }
 
-    #print(proc.time() - last.time)
+    for(l in 1:thinning) {
+
+    
+      Lambda1 <- diag(n) - rho1 * W
+      Lambda2 <- diag(n) - rho2 * W 
+  
+      S1 <- kronecker( diag(K), sqrt(q.value) * solve(Lambda1) )
+  
+      Sigma1 <- t(S1) %*% S1
+      Sigma2 <- (1-q.value) * kronecker( M, solve( t(Lambda2) %*% Lambda2 ) )
+  
+      Sigma <- Sigma1 + Sigma2
+      Sigma.inv <- solve(Sigma) 
+  
+      Q <- S1 %*% X 
+  
+      # variance of the posterior distribution of Beta
+      Beta.post.var <- solve( S.inv + t(Q) %*% Sigma.inv %*% Q ) 
+      # mean of the posterior distribution of Beta
+      Beta.post.mean <- Beta.post.var %*% ( t(Q) %*% Sigma.inv %*% Z + S.inv %*% Beta0)
+  
+      ## 1. generate new Beta
+      Beta <- matrix(rmvnorm(n=1,mean=Beta.post.mean,sigma=Beta.post.var),ncol=1)
+  
+      ## 2. generate deviates for the latent variables
+      Z <- matrix( 
+        rtmvnorm( n=1, mean=c(Q%*%Beta), sigma=Sigma, lower=Y.lower, upper=Y.upper,algorithm="gibbsR",burn.in.samples=m), 
+      ncol=1)
+  
+      ## 3. generate rho1 deviate
+      rho1 <- mh.lambda.sar2(1,c(rho1,rho2),Z,W,Beta,q.value,1,50,rho.range)
+
+      ## 4. generate rho2 deviate
+      rho2 <- mh.lambda.sar2(2,c(rho1,rho2),Z,W,Beta,q.value,1,50,rho.range)
+      
+      ## 5. generate q-values deviate
+    } 
+    Beta.save[i - burnIn,] <- Beta  # save our result
+    rho.save[i -  burnIn,1] <- rho1
+    rho.save[i -  burnIn,2] <- rho2 
   }
+  print(proc.time() - last.time)
 
-  return( list( Beta = Beta.save, rho = rho.save) )
+  return( list( Beta = Beta.save, rho = rho.save, q.value = q.save) )
 }
 
 
