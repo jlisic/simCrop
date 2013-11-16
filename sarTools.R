@@ -329,7 +329,7 @@ sarTools.probitGibbsSpatialRunDouble <- function(Y,states,X,W,Beta.init,rho.init
 
   Beta.save <- matrix(0,nrow=iter,ncol=length(Beta))  # Beta values
   rho.save <- matrix(0,nrow=iter,ncol=2)              # rho values
-  q.save <- matrix(0,nrow=iter,ncol=2)                # proportion parameter for variances
+  q.save <- matrix(0,nrow=iter,ncol=1)                # proportion parameter for variances
 
   M <- matrix(1,nrow=K,ncol=K)
 
@@ -374,11 +374,6 @@ sarTools.probitGibbsSpatialRunDouble <- function(Y,states,X,W,Beta.init,rho.init
       ## 1. generate new Beta
       Beta <- matrix(rmvnorm(n=1,mean=Beta.post.mean,sigma=Beta.post.var),ncol=1)
   
-      ## 2. generate deviates for the latent variables
-      Z <- matrix( 
-        rtmvnorm( n=1, mean=c(Q%*%Beta), sigma=Sigma, lower=Y.lower, upper=Y.upper,algorithm="gibbsR",burn.in.samples=m), 
-      ncol=1)
-  
       ## 3. generate rho1 deviate
       rho1 <- mh.lambda.sar2(1,c(rho1,rho2),Z,W,Beta,q.value,1,50,rho.range)
 
@@ -386,10 +381,18 @@ sarTools.probitGibbsSpatialRunDouble <- function(Y,states,X,W,Beta.init,rho.init
       rho2 <- mh.lambda.sar2(2,c(rho1,rho2),Z,W,Beta,q.value,1,50,rho.range)
       
       ## 5. generate q-values deviate
+      q.value <- mh.q.sar(c(rho1,rho2),Z,W,Beta,q.value,1,burnIn=50, rho.range)
+      
+      ## 2. generate deviates for the latent variables
+      Z <- matrix( 
+        rtmvnorm( n=1, mean=c(Q%*%Beta), sigma=Sigma, lower=Y.lower, upper=Y.upper,algorithm="gibbsR",burn.in.samples=m), 
+      ncol=1)
+
     } 
     Beta.save[i - burnIn,] <- Beta  # save our result
     rho.save[i -  burnIn,1] <- rho1
     rho.save[i -  burnIn,2] <- rho2 
+    q.save[i -  burnIn,1] <- q.value 
   }
   print(proc.time() - last.time)
 
@@ -628,6 +631,40 @@ sarCheck.simple <- function( rho, Y, W ) {
 }
 
 
+
+# this function performs mh sampler on either rho1 or rho2,
+logpdf.sar <- function(rho,Z,W,Beta,q.value) {
+
+  n <- nrow(W)
+  N <- nrow(Z)
+  K <- N/n
+  
+  rho1 <- rho[1]
+  rho2 <- rho[2]
+  
+  M <- matrix(1, nrow=K,ncol=K)
+  
+  Lambda1 <- diag(n) - rho1 * W
+  Lambda2 <- diag(n) - rho2 * W
+  
+  S1 <- kronecker( diag(K), sqrt(q.value) * solve(Lambda1) )
+  
+  Sigma1.x <- t(S1) %*% S1
+  Sigma2.x <- (1-q.value) * kronecker( M, solve( t(Lambda2) %*% Lambda2 ) )
+  
+  Sigma.x <- Sigma1 + Sigma2
+  Sigma.inv <- solve(Sigma)
+  Sigma.det <- det(Sigma)
+  
+  Q <- S1 %*% X
+  
+  Z.adj <-  Z - Q %*%Beta
+  
+  results <- - 1/2 * log(Sigma.det) - 1/2 * t(Z.adj) %*% Sigma.inv %*%  Z.adj
+  
+  return( results )
+
+}
 
 
 

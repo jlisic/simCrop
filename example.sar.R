@@ -15,7 +15,7 @@ rho <- -.15
 Beta.sim.corn  <- -1 
 Beta.sim.soy   <- 2 
 Beta <- matrix( c( Beta.sim.corn, Beta.sim.soy),ncol=1)
-iter <- 130
+iter <-  10 
 thinning <- 10
 burnIn <- 30
 m <- 10
@@ -24,7 +24,7 @@ q.value <- .5
 
 
 # create a 2x2 section set of quarter-quarter sections (QQS)
-a <- simCrop.partitionPLSS(1,1)
+a <- simCrop.partitionPLSS(4,4)
 
 # add initial crop assignment
 a.init <- simCrop.generateCropTypes(a,p)
@@ -33,7 +33,7 @@ W <- simCrop.createRookDist(a.init)
 
 # simulate 10 years of data
 a.crops <- sarTools.generateCropTypes(a.init, rho=rho, Beta=Beta, rho.global=rho.global, q.value=q.value) 
-for(i in 2:5) {
+for(i in 2:6) {
   a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, Beta=Beta, q.value=q.value) 
 }
 
@@ -48,6 +48,14 @@ q.init <- q.value
 beta0 <- c(0,0) 
 Sigma0 <- c(3,3) 
 
+
+
+
+
+
+
+
+if ( T ) {
 # result
 result <- sarTools.probitGibbsSpatial( 
   a.crops, 
@@ -62,9 +70,11 @@ result <- sarTools.probitGibbsSpatial(
   burnIn   # burnIn
   )
 
-
 print( colMeans(result$Beta))
 print( colMeans(result$rho))
+print( colMeans(result$q.value))
+}
+
 
 if( F ) {
 #

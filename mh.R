@@ -106,6 +106,72 @@ mh.lambda.sar <- function(Z,W,mu, x0,iter,burnIn=50, lambda.range) {
   return( results )
 }
 
+# this function performs mh sampler on either rho1 or rho2, 
+mh.q.sar <- function(rho,Z,W,Beta,q.value,iter,burnIn=50, rho.range) {
+    
+  n <- nrow(W)
+  N <- nrow(Z)
+  K <- N/n
+   
+  rho1 <- rho[1]
+  rho2 <- rho[2]
+
+  M <- matrix(1, nrow=K,ncol=K) 
+
+  Lambda1 <- diag(n) - rho1 * W
+  Lambda2 <- diag(n) - rho2 * W
+
+  S1 <- kronecker( diag(K), solve(Lambda1) )
+
+  Sigma1 <- t(S1) %*% S1
+  Sigma2 <- kronecker( M, solve( t(Lambda2) %*% Lambda2 ) )
+
+  Sigma.x <- q.value*Sigma1 + (1-q.value)*Sigma2
+  Sigma.inv.x <- solve(Sigma.x) 
+  Sigma.det.x <- det(Sigma.x)
+
+  Q.x <- sqrt(q.value) * S1 %*% X 
+    
+  Z.adj.x <-  Z - Q.x %*%Beta 
+
+  results <- 1:iter
+
+  # set the initial value for what we want
+  x <- q.value 
+
+  # iterations for metropolis hastings algorithm
+  for(i in 1:(iter + burnIn) ) {
+    y <- runif(1) 
+  
+    Sigma.y <- y*Sigma1 + (1-y)*Sigma2
+    Sigma.inv.y <- solve(Sigma.y) 
+    Sigma.det.y <- det(Sigma.y)
+    Q.y <- sqrt(y) * S1 %*% X 
+    Z.adj.y <-  Z - Q.y %*%Beta 
+    
+    u <- runif(1)
+
+    det.part <- sqrt( (Sigma.det.x) / (Sigma.det.y) )
+
+    #rho <- min( foo(y) /  foo(x), 1 ) 
+    alpha <- det.part * exp( -1/2 * ( t(Z.adj.y) %*% Sigma.inv.y %*%  Z.adj.y  - t(Z.adj.x) %*% Sigma.inv.x %*%  Z.adj.x ) )  
+    alpha <- min( alpha, 1 )
+
+    if (u < alpha) {
+      x <- y
+      Sigma.inv.x <- Sigma.inv.y
+      Sigma.det.x <- Sigma.det.y 
+      Z.adj.x <- Z.adj.y
+    }
+
+
+    if( i > burnIn) results[i - burnIn] <- x
+  }
+
+  return( results )
+}
+
+
 
 # this function performs mh sampler on either rho1 or rho2, 
 mh.lambda.sar2 <- function(rho.which,rho,Z,W,Beta,q.value,iter,burnIn=50, rho.range) {
