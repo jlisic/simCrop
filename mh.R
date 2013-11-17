@@ -153,9 +153,13 @@ mh.q.sar <- function(rho,Z,W,Beta,q.value,iter,burnIn=50, rho.range) {
 
     det.part <- sqrt( (Sigma.det.x) / (Sigma.det.y) )
 
-    #rho <- min( foo(y) /  foo(x), 1 ) 
-    alpha <- det.part * exp( -1/2 * ( t(Z.adj.y) %*% Sigma.inv.y %*%  Z.adj.y  - t(Z.adj.x) %*% Sigma.inv.x %*%  Z.adj.x ) )  
-    alpha <- min( alpha, 1 )
+    if (is.nan(det.part) ) {
+      #rho <- min( foo(y) /  foo(x), 1 ) 
+      alpha <- det.part * exp( -1/2 * ( t(Z.adj.y) %*% Sigma.inv.y %*%  Z.adj.y  - t(Z.adj.x) %*% Sigma.inv.x %*%  Z.adj.x ) )  
+      alpha <- min( alpha, 1 )
+    } else {
+      alpha <- 0 
+    }
 
     if (u < alpha) {
       x <- y
