@@ -1,10 +1,31 @@
 #library(RPostgreSQL)
 source('sarTools.R')
 
+
+parPlot <- function(x ,myTitle.hist, myTitle.acf, myFile) {
+  pdf(myFile,width=7,height=.6*7 )
+  par(mfrow=c(1,2))
+  hist(x, main=myTitle.hist)
+  acf(x,main=myTitle.acf)
+  dev.off()
+}
+
+parPlot.crops <- function(a , myFile) {
+  pdf(myFile)
+  par(mfrow=c(3,3))
+  #plot( raster(a$globalError[ sort(a$globalError[,1],index=T)$ix,2]) )
+  simCrop.plotCropTypes(a,newDev=F)
+  dev.off()
+}
+
+
+
+
 # In this example we are considering just two crops
 # 1. corn
 # 2. soybeans
 
+set.seed(400)
 
 # ratio of corn and soybeans
 p <- c(.6, .4)
@@ -15,7 +36,7 @@ rho <- -.15
 Beta.sim.corn  <- -1 
 Beta.sim.soy   <- 2 
 Beta <- matrix( c( Beta.sim.corn, Beta.sim.soy),ncol=1)
-iter <-  10 
+iter <-  200 
 thinning <- 10
 burnIn <- 30
 m <- 10
@@ -24,7 +45,7 @@ q.value <- .5
 
 
 # create a 2x2 section set of quarter-quarter sections (QQS)
-a <- simCrop.partitionPLSS(4,4)
+a <- simCrop.partitionPLSS(1,1)
 
 # add initial crop assignment
 a.init <- simCrop.generateCropTypes(a,p)
@@ -67,13 +88,24 @@ result <- sarTools.probitGibbsSpatial(
   iter,
   m,
   thinning,  # thinning
-  burnIn   # burnIn
+  burnIn,   # burnIn
+  method="omnibus"
   )
 
 print( colMeans(result$Beta))
 print( colMeans(result$rho))
 print( colMeans(result$q.value))
+
+parPlot( result$Beta[,1], "Beta, From Corn Histogram", "Beta, From Corn ACF", "~/src/dissertation/tSnippets/BetaCorn.pdf")
+parPlot( result$Beta[,2], "Beta, From Soybeans Histogram", "Beta, From Soybeans ACF", "~/src/dissertation/tSnippets/BetaSoybeans.pdf")
+parPlot( result$rho[,1], "rho1 Histogram", "rho1 ACF", "~/src/dissertation/tSnippets/rho1.pdf")
+parPlot( result$rho[,2], "rho2 Histogram", "rho2 ACF", "~/src/dissertation/tSnippets/rho2.pdf")
+parPlot( result$q.value, "q Histogram", "q ACF", "~/src/dissertation/tSnippets/qvalue.pdf")
+
 }
+
+
+
 
 
 if( F ) {

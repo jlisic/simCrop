@@ -152,7 +152,7 @@ sarTools.probitGibbsSpatial <- function( a, Beta.init, lambda.init, beta0,Sigma0
 }
 
 
-sarTools.probitGibbsSpatial <- function( a, Beta.init, rho.init, q.init, Beta0, Sigma0, iter, m, thinning, burnIn ) {
+sarTools.probitGibbsSpatial <- function( a, Beta.init, rho.init, q.init, Beta0, Sigma0, iter, m, thinning, burnIn,method='conditional' ) {
 
   myObjects <- a$cropType[,'myObjects']
   myObjects.sort <- sort( myObjects, index.return=T)$ix
@@ -176,7 +176,9 @@ sarTools.probitGibbsSpatial <- function( a, Beta.init, rho.init, q.init, Beta0, 
   W <- simCrop.createRookDist(a)
   fieldSize <- nrow(W)
 
-  result <- sarTools.probitGibbsSpatialRunDouble(
+
+  if(method=='omnibus') {
+    result <- sarTools.probitGibbsSpatialRunDouble(
                                       Y,
                                       a$crops,
                                       X,
@@ -190,6 +192,23 @@ sarTools.probitGibbsSpatial <- function( a, Beta.init, rho.init, q.init, Beta0, 
                                       m,
                                       thinning,
                                       burnIn) 
+  }
+  if(method=='conditional') {
+    result <- sarTools.probitGibbsSpatialRunConditional(
+                                      Y,
+                                      a$crops,
+                                      X,
+                                      W,
+                                      Beta.init,
+                                      rho.init,
+                                      q.init,
+                                      Beta0,
+                                      Sigma0,
+                                      iter,
+                                      m,
+                                      thinning,
+                                      burnIn) 
+  }
   return( result)
 }
 
@@ -295,6 +314,109 @@ sarTools.gibbsSpatialRun <- function(Y,X,W,Beta.init,rho.init,Beta0,Sigma0,iter,
 }
 
 
+# a sensible conditional SAR model
+sarTools.probitGibbsSpatialRunConditional <- function(Y,states,X,U,W,Beta.init,rho.init,alpha.sigma.init,Beta0,Sigma0,iter,m,thinning,burnIn=0) {
+  require(tmvtnorm)
+
+  Beta0 <- matrix(Beta0,ncol=1)
+  Sigma0 <- matrix(Sigma0,ncol=1)
+  Beta.n <- nrow(Beta0)
+  
+  # set initial conditions
+  Beta <- Beta.init
+  rho1 <- rho.init[1]
+  rho2 <- rho.init[2] 
+  #init some values
+  N <- nrow(Y)     # number of observations
+  n <- nrow(W)     # number of observations within a year 
+  K <- N / n       # number of years
+  p <- ncol(X)     # number of covariates
+
+
+  # take care of Y
+  Y.upper <- rep(0,times=N) 
+  Y.lower <- Y.upper 
+  Y.upper[ Y == states[1] ] <- Inf 
+  Y.lower[ Y == states[2] ] <- -Inf 
+
+
+  Beta.save <- matrix(0,nrow=iter,ncol=length(Beta))  # Beta values
+  rho.save <- matrix(0,nrow=iter,ncol=2)              # rho values
+  q.save <- matrix(0,nrow=iter,ncol=1)                # proportion parameter for variances
+
+  rho.range <- sort( 1/range(eigen(W)$values) )
+
+  Z <- matrix(0,nrow=N,ncol=1) 
+ 
+  UU <- solve(t(U) %*% U) 
+  XX <- solve(t(X) %*% X) 
+
+  # inverse of the prior variance
+  S.inv <- diag( c(1/Sigma0^2) )
+  last.time <- proc.time()
+
+  # the mcmc loop
+  for(i in 1:(iter+burnIn) ) {
+
+    if(i %% 10 == 0) {
+      print(proc.time() - last.time)
+      print(i)
+      last.time <- proc.time()
+    }
+
+    for(l in 1:thinning) {
+
+    
+      Lambda1 <- diag(n) - rho1 * W
+      Lambda2 <- diag(n) - rho2 * W 
+  
+      Lambda1.K <- kronecker(diag(K), Lambda1) 
+
+      Sigma1.inv <- t(S1) %*% S1
+      Sigma2.inv <- t(Lambda2) %*% Lambda2
+  
+      Q <- S1 %*% X 
+  
+      # variance of the posterior distribution of Beta
+      Beta.post.var <- solve( S.inv + XX ) 
+      # mean of the posterior distribution of Beta
+      Beta.post.mean <- Beta.post.var %*% ( X %*% (Lambda1 %*% Z - U%*%V)  + S.inv %*% Beta0)
+  
+      ## 1. generate new Beta
+      Beta <- matrix(rmvnorm(n=1,mean=Beta.post.mean,sigma=Beta.post.var),ncol=1)
+  
+      ## 3. generate rho1 deviate
+      rho1 <- mh.lambda.sar3(1,c(rho1,rho2),Z,W,Beta,q.value,1,50,rho.range)
+
+      ## 4. generate rho2 deviate
+      rho2 <- mh.lambda.sar3(2,c(rho1,rho2),Z,W,Beta,q.value,1,50,rho.range)
+      
+      ## 5. generate q-values deviate
+      q.value <- mh.q.sar(c(rho1,rho2),Z,W,Beta,q.value,1,burnIn=50, rho.range)
+     
+      Sigma2.cond <- solve(UU + Sigma2.inv)
+
+      ##  generate deviates for the random effect latent variables
+      V <- matrix( rmvnorm(1, mean= Sigma2.cond %*% t(U) %*%(Z - X%*%Beta), sigma=Sigma2.cond)  
+                  ncol=1)
+      
+      ## generate deviates for the truncated latent variables
+      Z <- matrix( 
+        rtmvnorm( n=1, mean=c(Lambda1.K %*%( X %*% Beta + U%*%V ), lower=Y.lower, upper=Y.upper,algorithm="gibbsR",burn.in.samples=m), 
+      ncol=1)
+
+    } 
+    Beta.save[i - burnIn,] <- Beta  # save our result
+    rho.save[i -  burnIn,1] <- rho1
+    rho.save[i -  burnIn,2] <- rho2 
+    q.save[i -  burnIn,1] <- q.value 
+  }
+  print(proc.time() - last.time)
+
+  return( list( Beta = Beta.save, rho = rho.save, q.value = q.save) )
+}
+
+
 ## probit Gibbs function ## 
 # Y vector of categorical responses in row major form, repeating for each year, length = (number of years) x fieldSize
 # X matrix of covariates  in row major form, repeating for each year, length = (number of years) x fieldSize
@@ -352,6 +474,14 @@ sarTools.probitGibbsSpatialRunDouble <- function(Y,states,X,W,Beta.init,rho.init
 
     for(l in 1:thinning) {
 
+      ## 3. generate rho1 deviate
+      rho1 <- mh.lambda.sar2(1,c(rho1,rho2),Z,W,Beta,q.value,1,50,rho.range)
+
+      ## 4. generate rho2 deviate
+      rho2 <- mh.lambda.sar2(2,c(rho1,rho2),Z,W,Beta,q.value,1,50,rho.range)
+      
+      ## 5. generate q-values deviate
+      q.value <- mh.q.sar(c(rho1,rho2),Z,W,Beta,q.value,1,burnIn=50, rho.range)
     
       Lambda1 <- diag(n) - rho1 * W
       Lambda2 <- diag(n) - rho2 * W 
@@ -374,14 +504,6 @@ sarTools.probitGibbsSpatialRunDouble <- function(Y,states,X,W,Beta.init,rho.init
       ## 1. generate new Beta
       Beta <- matrix(rmvnorm(n=1,mean=Beta.post.mean,sigma=Beta.post.var),ncol=1)
   
-      ## 3. generate rho1 deviate
-      rho1 <- mh.lambda.sar2(1,c(rho1,rho2),Z,W,Beta,q.value,1,50,rho.range)
-
-      ## 4. generate rho2 deviate
-      rho2 <- mh.lambda.sar2(2,c(rho1,rho2),Z,W,Beta,q.value,1,50,rho.range)
-      
-      ## 5. generate q-values deviate
-      q.value <- mh.q.sar(c(rho1,rho2),Z,W,Beta,q.value,1,burnIn=50, rho.range)
       
       ## 2. generate deviates for the latent variables
       Z <- matrix( 

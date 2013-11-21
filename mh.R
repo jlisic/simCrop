@@ -65,31 +65,32 @@ mh.lambda <- function(Z,W,x0,iter,burnIn=50, lambda.range) {
 
 #  --- lambda ---
 
-mh.lambda.sar <- function(Z,W,mu, x0,iter,burnIn=50, lambda.range) {
+mh.lambda.sar <- function(Z,W,mu, x0,iter,burnIn=50, rho.range) {
     
   n <- nrow(W)
-  N <- nrow(Z)/n
+  K <- nrow(Z)/n
 
   results <- 1:iter
 
   x <- x0
   Lambda.x <- diag(n) - x * W 
-  Lambda.x.det <- det(Lambda.x) 
-  Z.adj.x <- matrix(Lambda.x %*% matrix(Z,nrow=n),ncol=1) - mu 
+  
+  Z <- matrix(Z,nrow=n)
+  mu <- matrix(mu,nrow=n)
+  
+
+  Z.adj.x <- Lambda.x %*% Z - mu 
 
   # iterations for metropolis hastings algorithm
   for(i in 1:(iter + burnIn) ) {
-    y <- runif(1, min=lambda.range[1],max=lambda.range[2]) 
+    y <- runif(1, min=rho.range[1],max=rho.range[2]) 
     Lambda.y <- diag(n) - y * W 
-    Lambda.y.det <- det(Lambda.y) 
-    Z.adj.y <- matrix(Lambda.y %*% matrix(Z,nrow=n),ncol=1) - mu 
+    Z.adj.y <- Lambda.y %*% Z - mu 
  
     u <- runif(1)
 
-    det.part <- ( (Lambda.y.det) / (Lambda.x.det) )^(N)
-
     #rho <- min( foo(y) /  foo(x), 1 ) 
-    rho2 <- det.part * exp( -1/2 * ( t(Z.adj.y) %*% Z.adj.y  - t(Z.adj.x) %*%  Z.adj.x ) )  
+    rho2 <- exp( -1/2 * sum( Z.adj.y*Z.adj.y  - Z.adj.x*Z.adj.x ) )  
     rho <- min( rho2, 1 )
 
     if (u < rho) {
@@ -153,13 +154,15 @@ mh.q.sar <- function(rho,Z,W,Beta,q.value,iter,burnIn=50, rho.range) {
 
     det.part <- sqrt( (Sigma.det.x) / (Sigma.det.y) )
 
-    if (is.nan(det.part) ) {
+    if (is.finite(det.part) ) {
       #rho <- min( foo(y) /  foo(x), 1 ) 
       alpha <- det.part * exp( -1/2 * ( t(Z.adj.y) %*% Sigma.inv.y %*%  Z.adj.y  - t(Z.adj.x) %*% Sigma.inv.x %*%  Z.adj.x ) )  
       alpha <- min( alpha, 1 )
     } else {
       alpha <- 0 
     }
+
+    det.part <<- det.part
 
     if (u < alpha) {
       x <- y

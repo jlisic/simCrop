@@ -247,7 +247,7 @@ simCrop.addRotation <- function(a,K,transitionMatrix=F) {
   return(a)
 }
 
-simCrop.plotCropTypes <- function(a, years=0, error = F, useTransition=F ) {
+simCrop.plotCropTypes <- function(a, years=0, error = F, useTransition=F,newDev=T ) {
 
   crops <- list()
 
@@ -275,12 +275,12 @@ simCrop.plotCropTypes <- function(a, years=0, error = F, useTransition=F ) {
     if( is.matrix(crops[[j]]) ) {
       m <- sqrt(nrow(crops[[j]]))
       for( i in 1:(ncol(crops[[j]]) )) {
-        x11()
+        if(newDev) { x11()}
         plot( raster( matrix(crops[[j]][,i],byrow=T,nrow=m)),main=sprintf("Year = %d, Group= %d",i,j )) 
       }
     } else {
       m <- sqrt(length(crops[[j]]))
-      x11()
+      if(newDev) { x11()}
       plot( raster( matrix(crops[[j]],byrow=T,nrow=m)),main=sprintf("Year = %d, Group %d",1,j)) 
     }
   }
