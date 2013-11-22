@@ -212,8 +212,8 @@ sarTools.probitGibbsSpatialRunConditional <- function(
   # create U matrix
   U <- kronecker(matrix(1,ncol=1,nrow=K),diag(n))
 
-  UU <- solve(t(U) %*% U) 
-  XX <- solve(t(X) %*% X) 
+  UU <- t(U) %*% U 
+  XX <- t(X) %*% X 
 
   # static mu (zero) value for rho2
   mu2 <- matrix(0,ncol=1,nrow=n)
@@ -226,7 +226,7 @@ sarTools.probitGibbsSpatialRunConditional <- function(
   # the mcmc loop
   for(i in 1:(iter+burnIn) ) {
 
-    if(i %% 10 == 0) {
+    if(i %% 100 == 0) {
       print(proc.time() - last.time)
       print(i)
       last.time <- proc.time()
@@ -254,13 +254,6 @@ sarTools.probitGibbsSpatialRunConditional <- function(
       ## 3. generate tau deviate
       tau <- rgamma(1, shape = Gamma0[1] + n/2, rate= Gamma0[2] + t(V) %*% Sigma2.inv %*% V / 2 )
 
-      print("rho1")
-      print(rho1) 
-      print("rho2")
-      print(rho2) 
-      print("tau")
-      print(tau) 
-
       ## 4. generate new Beta
 
       # variance of the posterior distribution of Beta
@@ -271,21 +264,21 @@ sarTools.probitGibbsSpatialRunConditional <- function(
  
       Beta <- matrix(rmvnorm(n=1,mean=Beta.post.mean,sigma=Beta.post.var),ncol=1)
 
-      print("Beta")
-      print(Beta)
-
       mu1 <- Lambda1.K %*% (X %*% Beta + U %*% V)   
+      
+      if( F ) {
       print("mu1")
       print(mu1)
       mu1 <<- mu1
-      U <<- U
-      V <<- V
-      Beta <<-Beta  
+      U1 <<- U
+      V1 <<- V
+      Beta1 <<-Beta  
       Y.lower <<- Y.lower
       Y.upper <<- Y.upper
       S.inv <<- S.inv
       XX <<- XX
       Lambda1.K  <<- Lambda1.K 
+      }
 
       ## 5. generate deviates for the truncated latent variables
       Z <- matrix( 
@@ -297,9 +290,6 @@ sarTools.probitGibbsSpatialRunConditional <- function(
       Sigma2.cond <- solve(UU + Sigma2.inv*tau)
       V <- matrix( rmvnorm(1, mean= Sigma2.cond %*% t(U) %*%(Z - X%*%Beta), sigma=Sigma2.cond),  
                   ncol=1)
-    print(i)  
-    print(c(Z))
-    print(c(V))
     } 
     Beta.save[i - burnIn,] <- Beta  # save our result
     rho.save[i -  burnIn,1] <- rho1

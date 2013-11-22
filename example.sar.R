@@ -36,8 +36,8 @@ Beta.sim.corn  <- -1
 Beta.sim.soy   <- 2 
 Beta <- matrix( c( Beta.sim.corn, Beta.sim.soy),ncol=1)
 
-iter <-  3 
-thinning <- 1
+iter <-  1000 
+thinning <- 10
 burnIn <- 0 
 m <- 1
 tau <- c(1,.5)
@@ -53,7 +53,7 @@ W <- simCrop.createRookDist(a.init)
 
 # simulate 10 years of data
 a.crops <- sarTools.generateCropTypes(a.init, rho=rho, Beta=Beta, tau=tau) 
-for(i in 2:2) {
+for(i in 2:6) {
   a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, Beta=Beta, tau=tau[1]) 
 }
 

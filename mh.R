@@ -91,7 +91,7 @@ mh.lambda.sar <- function(Z,W,mu,tau,x0,iter,burnIn=50, rho.range) {
 
     #rho <- min( foo(y) /  foo(x), 1 ) 
     quadratic.form <-  sum( Z.adj.y*Z.adj.y  - Z.adj.x*Z.adj.x )   
-    print(quadratic.form)
+    
     if( quadratic.form < 0 ) { 
       acceptNewProb <- 1
     } else {
