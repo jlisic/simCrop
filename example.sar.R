@@ -31,17 +31,16 @@ set.seed(400)
 p <- c(.6, .4)
 
 # parameters 
-rho.global <- .20 
-rho <- -.15
+rho <- c(-.15,.20)
 Beta.sim.corn  <- -1 
 Beta.sim.soy   <- 2 
 Beta <- matrix( c( Beta.sim.corn, Beta.sim.soy),ncol=1)
-iter <-  200 
-thinning <- 10
-burnIn <- 30
-m <- 10
-q.value <- .5
 
+iter <-  3 
+thinning <- 1
+burnIn <- 0 
+m <- 1
+tau <- c(1,.5)
 
 
 # create a 2x2 section set of quarter-quarter sections (QQS)
@@ -53,9 +52,9 @@ a.init <- simCrop.getNeighbors(a.init)
 W <- simCrop.createRookDist(a.init) 
 
 # simulate 10 years of data
-a.crops <- sarTools.generateCropTypes(a.init, rho=rho, Beta=Beta, rho.global=rho.global, q.value=q.value) 
-for(i in 2:6) {
-  a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, Beta=Beta, q.value=q.value) 
+a.crops <- sarTools.generateCropTypes(a.init, rho=rho, Beta=Beta, tau=tau) 
+for(i in 2:2) {
+  a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, Beta=Beta, tau=tau[1]) 
 }
 
 
@@ -63,20 +62,43 @@ for(i in 2:6) {
 object.sort <- sort(a.crops$cropType[,'myObjects'],index.return=T)$ix
 Z <- c(a.crops$cropValue[object.sort,])
 
-Beta.init <- c(0,0)
-rho.init <- c( 0, 0)
-q.init <- q.value 
-beta0 <- c(0,0) 
-Sigma0 <- c(3,3) 
+Beta.init <- c(-1,2)
+rho.init <- c( -.15, .20)
+alpha.sigma.init <- matrix(0,nrow(W),ncol=1)
+tau.init <- .5 
 
 
+Beta0 <- c(0,0) 
+Sigma0 <- c(2,2) 
+Gamma0 <- c(1,1/2)
 
 
+result <- sarTools.probitGibbsSpatial( 
+  a.crops, 
+  fun=sarTools.probitGibbsSpatialRunConditional,
+
+  Beta.init=Beta.init,
+  rho.init=rho.init,
+  alpha.sigma.init=alpha.sigma.init,
+  tau.init=tau.init,
+
+#hyper parameters
+  Beta0=Beta0,
+  Sigma0=Sigma0,
+  Gamma0=Gamma0, # shape and rate
+#runtime params
+  iter=iter,
+  m=m,         # thinning for Y
+  thinning=thinning,  # thinning
+  burnIn=burnIn     # burnIn
+  )
+
+print( colMeans(result$Beta))
+print( colMeans(result$Rho))
+print( colMeans(result$Tau))
 
 
-
-
-if ( T ) {
+if ( F ) {
 # result
 result <- sarTools.probitGibbsSpatial( 
   a.crops, 
@@ -141,5 +163,19 @@ result.can <- sarTools.probitGibbsSpatial2(a.crops,Beta.init,rho.init,Beta0,Sigm
 #
 #dbUnloadDriver(drv)
 #}
+
+## test for mh
+if( F ) {
+result <- sarTools.probitGibbsSpatial(a.crops, fun=function(...) {} ) 
+
+thinning <- 25 
+rhos <- c(0)
+start.time <- proc.time()
+for(i in 2:1000) {
+  rhos[i] <- mh.lambda.sar(Z=Z,W=W,mu=X %*% Beta,tau=1,x0=rhos[i-1],iter=1, burnIn=thinning, rho.range=carTools.checkRho(W)) 
+}
+print( proc.time() - start.time)
+plot(rhos)
+}
 
 

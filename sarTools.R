@@ -112,47 +112,14 @@ carTools.probitGibbs <- function(y,X,Beta,Beta0,Sigma0,iter) {
 }
 
 
-sarTools.probitGibbsSpatial <- function( a, Beta.init, lambda.init, beta0,Sigma0, iter, m ) {
-
-  myObjects <- a$cropType[,'myObjects']
-  myObjects.sort <- sort( myObjects, index.return=T)$ix
-  priorYears <- ncol( a$cropType) - 2  
-
-  # take care of Y
-  Y <- matrix(a$cropType[,c(-1,-2)],ncol=priorYears)
-  
-  Y.sort <- matrix(1:length(Y),ncol=priorYears)
-  Y.sort <- c(Y.sort[myObjects.sort,])
-  Y <- Y[Y.sort]
-  Y <- matrix(Y,ncol=1)
-
-  # take care of X
-  X <- matrix(sarTools.priorStateDesignMatrix(a),ncol=priorYears)
-  X <- X[ Y.sort, ]
-
-  # take care of W  
-  W <- simCrop.createRookDist(a)
-  fieldSize <- nrow(W)
-
-  X <<- X
-  Y <<- Y
-
-  result <- sarTools.probitGibbsSpatialRun(
-                                      Y,
-                                      a$crops,
-                                      X,
-                                      W,
-                                      Beta.init,
-                                      lambda.init,
-                                      Beta0,
-                                      Sigma0,
-                                      iter,
-                                      m) 
-  return( result)
-}
 
 
-sarTools.probitGibbsSpatial <- function( a, Beta.init, rho.init, q.init, Beta0, Sigma0, iter, m, thinning, burnIn,method='conditional' ) {
+## probit Gibbs function ## 
+# Y vector of categorical responses in row major form, repeating for each year, length = (number of years) x fieldSize
+# X matrix of covariates  in row major form, repeating for each year, length = (number of years) x fieldSize
+# W matrix in row major form of spatial neighborhoods, dim is fieldSize x fieldSize
+
+sarTools.probitGibbsSpatial <- function( a, fun, ... ) {
 
   myObjects <- a$cropType[,'myObjects']
   myObjects.sort <- sort( myObjects, index.return=T)$ix
@@ -174,158 +141,52 @@ sarTools.probitGibbsSpatial <- function( a, Beta.init, rho.init, q.init, Beta0, 
 
   # take care of W  
   W <- simCrop.createRookDist(a)
-  fieldSize <- nrow(W)
 
+  # run the function
+  result <- fun( Y=Y, states=a$crops, X=X, W=W, ... )
 
-  if(method=='omnibus') {
-    result <- sarTools.probitGibbsSpatialRunDouble(
-                                      Y,
-                                      a$crops,
-                                      X,
-                                      W,
-                                      Beta.init,
-                                      rho.init,
-                                      q.init,
-                                      Beta0,
-                                      Sigma0,
-                                      iter,
-                                      m,
-                                      thinning,
-                                      burnIn) 
-  }
-  if(method=='conditional') {
-    result <- sarTools.probitGibbsSpatialRunConditional(
-                                      Y,
-                                      a$crops,
-                                      X,
-                                      W,
-                                      Beta.init,
-                                      rho.init,
-                                      q.init,
-                                      Beta0,
-                                      Sigma0,
-                                      iter,
-                                      m,
-                                      thinning,
-                                      burnIn) 
-  }
   return( result)
-}
-
-
-sarTools.probitGibbsSpatial2 <- function( a, Beta.init, rho.init, beta0,Sigma0, iter, m,thinning,burnin ) {
-
-  require('spatialprobit')
-
-  myObjects <- a$cropType[,'myObjects']
-  myObjects.sort <- sort( myObjects, index.return=T)$ix
-  priorYears <- ncol( a$cropType) - 2  
-
-  # take care of Y
-  Y <- matrix(a$cropType[,c(-1,-2)],ncol=priorYears)
-  
-  Y.sort <- matrix(1:length(Y),ncol=priorYears)
-  Y.sort <- c(Y.sort[myObjects.sort,])
-  Y <- Y[Y.sort]
-  Y <- matrix(abs(Y-2),ncol=1) 
-  Y <<- Y
-
-  # take care of X
-  X <- sarTools.priorStateDesignMatrix(a)
-  X <- X[ Y.sort, ]
-  X <<- X
-
-  # take care of W  
-  W <- simCrop.createRookDist(a)
-  W.big <- kronecker(diag(priorYears),W) 
-  fieldSize <- nrow(W)
-
-
-  result <- sar_probit_mcmc(  
-                                      y=Y,
-                                      X=X,
-                                      W=as(W.big,"CsparseMatrix"),
-                                      ndraw=iter,
-                                      burn.in=burnin,
-                                      thinning=thinning,
-                                      # prior - Not Set, using diffuse
-                                      start= list( rho=rho.init, beta= Beta.init),
-                                      m=m,
-                                      showProgress=TRUE
-                                     ) 
-                                      
-  return( result)
-}
-
-
-sarTools.gibbsSpatialRun <- function(Y,X,W,Beta.init,rho.init,Beta0,Sigma0,iter,m) {
-
-  # set initial conditions
-  Beta <- Beta.init
-  rho <- rho.init 
-  #init some values
-  n <- nrow(Y)     # number of observations
-  K <- n / nrow(W) # number of years
-  p <- ncol(X)     # number of covariates
-
-  Beta.save <- c()
-  rho.save <- c()
-
-  W.big <- kronecker(diag(K),W) 
-  rho.range <- sort( 1/range(eigen(W)$values) )
-
-  Z <- matrix(0,nrow=n,ncol=1) 
-  trunc.point <- Z
-
-  # inverse of the prior variance
-  T.inv <- diag(ncol(X)) / Sigma0^2
-  B.star.inv <- solve( t(X) %*% X + T.inv ) 
-
-  # the mcmc loop
-  for(i in 1:iter) {
-
-    # Lambda update
-    Lambda.inv <- diag(n) - rho * W.big 
-    Sigma.inv <- t(Lambda.inv) %*% Lambda.inv
- 
-    # because we don't have latents 
-    Z <- Y 
-
-    if( F ) { 
-
-      B <- B.star.inv %*% (t(X) %*% Lambda.inv %*% Z  + T.inv %*% Beta0)  
-      
-      # generate deviates for beta/mu
-      Beta.save[i] <- rnorm(1,B, B.star.inv )
-      Beta <- Beta.save[i]
-      print( proc.time() - last.time)  
-    } else {
-      Beta.save[1] <- Beta
-    }
-
-    # generate lambda deviate
-    if( T ) {
-      rho.save[i] <- mh.lambda.sar(Z,W, X%*% Beta,0,1,100,rho.range )
-      rho <- rho.save[i] 
-    }
-  }
-  
-  return( list( Beta = Beta.save, rho = rho.save) )
 }
 
 
 # a sensible conditional SAR model
-sarTools.probitGibbsSpatialRunConditional <- function(Y,states,X,U,W,Beta.init,rho.init,alpha.sigma.init,Beta0,Sigma0,iter,m,thinning,burnIn=0) {
+sarTools.probitGibbsSpatialRunConditional <- function(
+# parameters (these are provided by sarTools.probitGibbsSpatial)
+  Y,
+  states,
+  X,
+  W,
+#init parameters
+  Beta.init,
+  rho.init,
+  alpha.sigma.init,
+  tau.init,
+#hyper parameters
+  Beta0,
+  Sigma0,
+  Gamma0,
+#runtime parameters
+  iter,
+  m,
+  thinning,
+  burnIn=0
+  ) {
+
+# required packages
   require(tmvtnorm)
 
   Beta0 <- matrix(Beta0,ncol=1)
   Sigma0 <- matrix(Sigma0,ncol=1)
+  
   Beta.n <- nrow(Beta0)
   
   # set initial conditions
   Beta <- Beta.init
   rho1 <- rho.init[1]
   rho2 <- rho.init[2] 
+  tau  <- tau.init
+  V <- alpha.sigma.init
+
   #init some values
   N <- nrow(Y)     # number of observations
   n <- nrow(W)     # number of observations within a year 
@@ -342,18 +203,25 @@ sarTools.probitGibbsSpatialRunConditional <- function(Y,states,X,U,W,Beta.init,r
 
   Beta.save <- matrix(0,nrow=iter,ncol=length(Beta))  # Beta values
   rho.save <- matrix(0,nrow=iter,ncol=2)              # rho values
-  q.save <- matrix(0,nrow=iter,ncol=1)                # proportion parameter for variances
+  tau.save <- matrix(0,nrow=iter,ncol=1)                # proportion parameter for variances
 
   rho.range <- sort( 1/range(eigen(W)$values) )
 
   Z <- matrix(0,nrow=N,ncol=1) 
- 
+
+  # create U matrix
+  U <- kronecker(matrix(1,ncol=1,nrow=K),diag(n))
+
   UU <- solve(t(U) %*% U) 
   XX <- solve(t(X) %*% X) 
+
+  # static mu (zero) value for rho2
+  mu2 <- matrix(0,ncol=1,nrow=n)
 
   # inverse of the prior variance
   S.inv <- diag( c(1/Sigma0^2) )
   last.time <- proc.time()
+     
 
   # the mcmc loop
   for(i in 1:(iter+burnIn) ) {
@@ -366,54 +234,81 @@ sarTools.probitGibbsSpatialRunConditional <- function(Y,states,X,U,W,Beta.init,r
 
     for(l in 1:thinning) {
 
-    
+
+      ## 1. generate rho1 deviate
+      mu <- X %*% Beta + U%*%V
+      rho1 <- mh.lambda.sar(Z=Z,W=W,mu=mu,tau=1,x0=rho1,iter=1,burnIn=25,rho.range=rho.range)
+
+      ## 2. generate rho2 deviate
+      rho2 <- mh.lambda.sar(Z=V,W=W,mu=mu2,tau=tau,x0=rho2,iter=1,burnIn=25,rho.range=rho.range)
+   
+      # update step 
       Lambda1 <- diag(n) - rho1 * W
       Lambda2 <- diag(n) - rho2 * W 
-  
+
+      Sigma1.inv <- t(Lambda1) %*% Lambda1 
+      Sigma2.inv <- t(Lambda2) %*% Lambda2
+      
       Lambda1.K <- kronecker(diag(K), Lambda1) 
 
-      Sigma1.inv <- t(S1) %*% S1
-      Sigma2.inv <- t(Lambda2) %*% Lambda2
-  
-      Q <- S1 %*% X 
-  
+      ## 3. generate tau deviate
+      tau <- rgamma(1, shape = Gamma0[1] + n/2, rate= Gamma0[2] + t(V) %*% Sigma2.inv %*% V / 2 )
+
+      print("rho1")
+      print(rho1) 
+      print("rho2")
+      print(rho2) 
+      print("tau")
+      print(tau) 
+
+      ## 4. generate new Beta
+
       # variance of the posterior distribution of Beta
       Beta.post.var <- solve( S.inv + XX ) 
-      # mean of the posterior distribution of Beta
-      Beta.post.mean <- Beta.post.var %*% ( X %*% (Lambda1 %*% Z - U%*%V)  + S.inv %*% Beta0)
-  
-      ## 1. generate new Beta
-      Beta <- matrix(rmvnorm(n=1,mean=Beta.post.mean,sigma=Beta.post.var),ncol=1)
-  
-      ## 3. generate rho1 deviate
-      rho1 <- mh.lambda.sar3(1,c(rho1,rho2),Z,W,Beta,q.value,1,50,rho.range)
-
-      ## 4. generate rho2 deviate
-      rho2 <- mh.lambda.sar3(2,c(rho1,rho2),Z,W,Beta,q.value,1,50,rho.range)
-      
-      ## 5. generate q-values deviate
-      q.value <- mh.q.sar(c(rho1,rho2),Z,W,Beta,q.value,1,burnIn=50, rho.range)
      
-      Sigma2.cond <- solve(UU + Sigma2.inv)
+      # mean of the posterior distribution of Beta
+      Beta.post.mean <- Beta.post.var %*% ( t(X) %*% (Lambda1.K %*% Z - U%*%V)  + S.inv %*% Beta0)
+ 
+      Beta <- matrix(rmvnorm(n=1,mean=Beta.post.mean,sigma=Beta.post.var),ncol=1)
 
-      ##  generate deviates for the random effect latent variables
-      V <- matrix( rmvnorm(1, mean= Sigma2.cond %*% t(U) %*%(Z - X%*%Beta), sigma=Sigma2.cond)  
-                  ncol=1)
-      
-      ## generate deviates for the truncated latent variables
+      print("Beta")
+      print(Beta)
+
+      mu1 <- Lambda1.K %*% (X %*% Beta + U %*% V)   
+      print("mu1")
+      print(mu1)
+      mu1 <<- mu1
+      U <<- U
+      V <<- V
+      Beta <<-Beta  
+      Y.lower <<- Y.lower
+      Y.upper <<- Y.upper
+      S.inv <<- S.inv
+      XX <<- XX
+      Lambda1.K  <<- Lambda1.K 
+
+      ## 5. generate deviates for the truncated latent variables
       Z <- matrix( 
-        rtmvnorm( n=1, mean=c(Lambda1.K %*%( X %*% Beta + U%*%V ), lower=Y.lower, upper=Y.upper,algorithm="gibbsR",burn.in.samples=m), 
+        rtmvnorm( n=1, mean=c(Lambda1.K %*%( X %*% Beta + U%*%V )), lower=Y.lower, upper=Y.upper,algorithm="gibbsR",burn.in.samples=m), 
       ncol=1)
 
+
+      ## 6. generate deviates for the random effect latent variables
+      Sigma2.cond <- solve(UU + Sigma2.inv*tau)
+      V <- matrix( rmvnorm(1, mean= Sigma2.cond %*% t(U) %*%(Z - X%*%Beta), sigma=Sigma2.cond),  
+                  ncol=1)
+    print(i)  
+    print(c(Z))
+    print(c(V))
     } 
     Beta.save[i - burnIn,] <- Beta  # save our result
     rho.save[i -  burnIn,1] <- rho1
     rho.save[i -  burnIn,2] <- rho2 
-    q.save[i -  burnIn,1] <- q.value 
+    tau.save[i -  burnIn,1] <- tau 
   }
   print(proc.time() - last.time)
 
-  return( list( Beta = Beta.save, rho = rho.save, q.value = q.save) )
+  return( list( Beta = Beta.save, Rho = rho.save, Tau=tau.save ) )
 }
 
 
@@ -522,100 +417,13 @@ sarTools.probitGibbsSpatialRunDouble <- function(Y,states,X,W,Beta.init,rho.init
 }
 
 
-## probit Gibbs function ## 
-# Y vector of categorical responses in row major form, repeating for each year, length = (number of years) x fieldSize
-# X matrix of covariates  in row major form, repeating for each year, length = (number of years) x fieldSize
-# W matrix in row major form of spatial neighborhoods, dim is fieldSize x fieldSize
-# fieldSize, number of observations in a given year
-#  
-sarTools.probitGibbsSpatialRun <- function(Y,states,X,W,Beta.init,rho.init,Beta0,Sigma0,iter,m) {
-
-  Beta0 <- matrix(Beta0,ncol=1)
-  Sigma0 <- matrix(Sigma0,ncol=1)
-  Beta.n <- nrow(Beta0)
   
-  # set initial conditions
-  Beta <- Beta.init
-  rho <- rho.init 
-  #init some values
-  n <- nrow(Y)     # number of observations
-  K <- n / nrow(W)
-  p <- ncol(X)     # number of covariates
-
-  Beta.save <- matrix(0,nrow=iter,ncol=length(Beta)) 
-  rho.save <- matrix(0,nrow=iter,ncol=1) 
-
-  W.big <- kronecker(diag(K),W) 
-  rho.range <- sort( 1/range(eigen(W)$values) )
-
-  Z <- matrix(0,nrow=n,ncol=1) 
-  trunc.point <- Z
-
-  # inverse of the prior variance
-  T.inv <- diag( c(1/Sigma0^2) )
-  T.inv <<- T.inv
-  B.star.inv <- solve( t(X) %*% X + T.inv ) 
-  B.star.inv.sqrt <- mroot(B.star.inv) # require mgcv
-
-  # the mcmc loop
-  for(i in 1:iter) {
-    print(i)
-    last.time <- proc.time()
-    # Lambda update
-    Lambda <- diag(n) - rho * W.big 
-    Sigma.inv <- t(Lambda) %*% Lambda
-  
-    # generate deviates for the latent variables
-    Z <- matrix(0,nrow=n,ncol=1) 
-    for( k in 1:m) {
-      for( j in 1:n) {
-
-        Z.sd <- 1/sqrt(Sigma.inv[j,j])
-        
-        trunc.point[j] <-  (X[j,] %*% Beta - (Sigma.inv[j,-j]/Sigma.inv[j,j]) %*% Z[-j] )/ ( -1 * Z.sd ) 
-
-        if( Y[j] == states[1]) {
-          Z[j] <- rtnorm( 1, upper=trunc.point[j], sd=1 ) 
-        } else if( Y[j] == states[2] ) {
-          Z[j] <- rtnorm( 1, lower=trunc.point[j], sd=1 ) 
-        } else {
-          print( "Error:  Unknown State" )
-        }
-      }
-    
-      Z <- X %*% Beta + Z
-  
-      if( T ) { 
-        B <- B.star.inv %*% (t(X) %*% Lambda %*% Z  + T.inv %*% Beta0)  
-        
-        # generate deviates for beta/mu
-        Beta.save[i,] <- B + B.star.inv.sqrt %*% rnorm(Beta.n) 
-  
-        Beta <- matrix(Beta.save[i,],ncol=1)
-        print(Beta)
-      } else {
-        Beta.save <- t(Beta)
-      }
-
-    }
-    # generate lambda deviate
-    if( T ) {
-      rho.save[i,] <- mh.lambda.sar(Z,W, X%*% Beta,0,1,100,rho.range )
-      rho <- rho.save[i,] 
-    } else {
-      rho.save <- t(rho)
-    }
-    print(proc.time() - last.time)
-  }
-
-  return( list( Beta = Beta.save, rho = rho.save) )
-}
 
 
-sarTools.deviates <- function( rho, W, X, Beta, q.value) {
+sarTools.deviates <- function( rho, W, X, Beta, tau=1) {
   n <- nrow(X)
   if( is.null(n) ) n <- length(X)
-  Lambda <- (diag(n) - rho * W) / sqrt(q.value)
+  Lambda <- (diag(n) - rho * W)
   Lambda.inv <- solve(Lambda)
   print( sprintf( "Simulating with Beta=%f Rho=%f",Beta,rho) )
   if(is.null(nrow(Beta))) Beta <- matrix(Beta,ncol=1)
@@ -623,8 +431,9 @@ sarTools.deviates <- function( rho, W, X, Beta, q.value) {
 
   rhoRange <-carTools.checkRho(W) 
   epsilon <- rnorm(n)
-  Y <- Lambda.inv %*% (X %*% Beta + epsilon) 
+  Y <- Lambda.inv %*% (X %*% Beta + epsilon / tau ) 
 
+  # sanity checks
   Beta.hat <- solve( t(X) %*% X )  %*% t(X) %*% Lambda %*% Y 
   print( sprintf( "MLE Beta=%f Rho=%f",Beta.hat, 
     optim( rho, sarCheck, Y=Y, W=W, X=X, Beta=Beta, lower=rhoRange[1] + 0.0001, upper=rhoRange[2] - 0.0001,method="Brent" )$par ))
@@ -667,7 +476,7 @@ sarTools.priorStateDesignMatrix <- function(a,priorYear) {
 }
 
 
-sarTools.generateCropTypes <- function(a, p, rho, X, Beta, rho.global, q.value) {
+sarTools.generateCropTypes <- function(a, p, rho, X, Beta, tau) {
 
   if( !missing(p) ) {
     return( simCrop.generateCropTypes(a.neighbors,p) )
@@ -706,13 +515,13 @@ sarTools.generateCropTypes <- function(a, p, rho, X, Beta, rho.global, q.value) 
 
 
   # take care of global error
-  if( !missing(rho.global) ) {
-     a$globalError <- cbind( a$neighbors[,1], sarTools.deviates( rho=rho.global, W=W,X=matrix(1,ncol=1,nrow=nrow(W)),Beta=0, q.value=(1-q.value)) [ myObjects.unsortIndex ] )
+  if( length(tau) == 2 ) {
+     a$globalError <- cbind( a$neighbors[,1], sarTools.deviates( rho=rho[2], W=W,X=matrix(1,ncol=1,nrow=nrow(W)),Beta=0, tau=tau[2]) [ myObjects.unsortIndex ] )
      colnames(a$globalError) <- c('myObjects','error')
   }
 
   # take care of Y 
-  Y <- sarTools.deviates( rho, W, X.sort, Beta, q.value=q.value )
+  Y <- sarTools.deviates( rho[1], W, X.sort, Beta, tau=tau[1] )
 
   # if there is a global error available add it
   if(!is.null(a$globalError) ) {

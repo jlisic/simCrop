@@ -65,7 +65,7 @@ mh.lambda <- function(Z,W,x0,iter,burnIn=50, lambda.range) {
 
 #  --- lambda ---
 
-mh.lambda.sar <- function(Z,W,mu, x0,iter,burnIn=50, rho.range) {
+mh.lambda.sar <- function(Z,W,mu,tau,x0,iter,burnIn=50, rho.range) {
     
   n <- nrow(W)
   K <- nrow(Z)/n
@@ -73,7 +73,7 @@ mh.lambda.sar <- function(Z,W,mu, x0,iter,burnIn=50, rho.range) {
   results <- 1:iter
 
   x <- x0
-  Lambda.x <- diag(n) - x * W 
+  Lambda.x <- diag(n) - x * W
   
   Z <- matrix(Z,nrow=n)
   mu <- matrix(mu,nrow=n)
@@ -84,19 +84,30 @@ mh.lambda.sar <- function(Z,W,mu, x0,iter,burnIn=50, rho.range) {
   # iterations for metropolis hastings algorithm
   for(i in 1:(iter + burnIn) ) {
     y <- runif(1, min=rho.range[1],max=rho.range[2]) 
-    Lambda.y <- diag(n) - y * W 
+    Lambda.y <- diag(n) - y * W
     Z.adj.y <- Lambda.y %*% Z - mu 
  
     u <- runif(1)
 
     #rho <- min( foo(y) /  foo(x), 1 ) 
-    rho2 <- exp( -1/2 * sum( Z.adj.y*Z.adj.y  - Z.adj.x*Z.adj.x ) )  
-    rho <- min( rho2, 1 )
+    quadratic.form <-  sum( Z.adj.y*Z.adj.y  - Z.adj.x*Z.adj.x )   
+    print(quadratic.form)
+    if( quadratic.form < 0 ) { 
+      acceptNewProb <- 1
+    } else {
+      rho2 <- exp( -1/2 * tau * sum( Z.adj.y*Z.adj.y  - Z.adj.x*Z.adj.x ) )  
+      
+      if( is.nan(rho2) ) { 
+        acceptNewProb <- 0
+        acceptNewProb <- min( rho2, 1 )
+      } else {
+        acceptNewProb <- min( rho2, 1 )
+      }
+    }
 
-    if (u < rho) {
+    if (u < acceptNewProb ) {
       x <- y
       Lambda.x <- Lambda.y
-      Lambda.x.det <- Lambda.y.det
       Z.adj.x <- Z.adj.y
     }
 
