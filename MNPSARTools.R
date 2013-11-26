@@ -403,14 +403,21 @@ sarTools.deviates <- function( rho, W, X, Beta, Sigma, tau=1) {
   print( sprintf( "Simulating with Beta=%f Rho=%f Tau=%f",Beta,rho, tau) )
   if(minDim(Beta) == 1) Beta <- matrix(Beta,ncol=1)
   if(minDim(X) == 1)    X <- matrix(X,ncol=1)
- 
-  # get the dim of W 
-  J <- minDim(W) 
-
-
+  
   rhoRange <-carTools.checkRho(W)
-  epsilon <- rnorm(n)
-  Y <- Lambda.inv %*% (X %*% Beta + epsilon / sqrt(tau) ) 
+ 
+  if( missing(Sigma) ) { 
+    epsilon <- rnorm(n)
+    Y <- Lambda.inv %*% (X %*% Beta + epsilon / sqrt(tau) ) 
+  } else {
+    # get the dim of Sigma (so we now how many choices) 
+    J <- minDim(Sigma) 
+    matrix( kronecker(matrix(1,nrow=J,ncol=1), X%*%Beta)
+    Y <- rmvnorm(n,mroot(solve(tau))
+
+    epsilon <- matrix(rnorm(n*J)) %*% solve tau
+    Y <- Lambda.inv %*% (X %*% Beta + epsilon %*% solve(tau) ) 
+  }
 
   # sanity checks
   Beta.hat <- solve( t(X) %*% X )  %*% t(X) %*% Lambda %*% Y 
