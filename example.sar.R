@@ -36,15 +36,15 @@ Beta.sim.corn  <- -1
 Beta.sim.soy   <- 2 
 Beta <- matrix( c( Beta.sim.corn, Beta.sim.soy),ncol=1)
 
-iter <-  1000 
-thinning <- 10
+iter <- 2 
+thinning <- 20
 burnIn <- 0 
-m <- 1
-tau <- c(1,.5)
+m <- 10 
+tau <- c(1,10)
 
 
 # create a 2x2 section set of quarter-quarter sections (QQS)
-a <- simCrop.partitionPLSS(1,1)
+a <- simCrop.partitionPLSS(2,2)
 
 # add initial crop assignment
 a.init <- simCrop.generateCropTypes(a,p)
@@ -53,7 +53,7 @@ W <- simCrop.createRookDist(a.init)
 
 # simulate 10 years of data
 a.crops <- sarTools.generateCropTypes(a.init, rho=rho, Beta=Beta, tau=tau) 
-for(i in 2:6) {
+for(i in 2:5) {
   a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, Beta=Beta, tau=tau[1]) 
 }
 
@@ -62,23 +62,31 @@ for(i in 2:6) {
 object.sort <- sort(a.crops$cropType[,'myObjects'],index.return=T)$ix
 Z <- c(a.crops$cropValue[object.sort,])
 
-Beta.init <- c(-1,2)
+
+### inits
+#Beta.init <- c(0,0)
+Beta.init <- Beta 
 rho.init <- c( -.15, .20)
-alpha.sigma.init <- matrix(0,nrow(W),ncol=1)
-tau.init <- .5 
+#alpha.sigma.init <- matrix(0,nrow(W),ncol=1)
+alpha.sigma.init <- a.crops$globalError[object.sort,'error']
+tau.init <- tau[2] 
+Z.init <- c(a.crops$cropValue[object.sort,]) - c(alpha.sigma.init)
 
-
+### hyper params
 Beta0 <- c(0,0) 
 Sigma0 <- c(2,2) 
 Gamma0 <- c(1,1/2)
 
 
+
+if ( F ) {
 result <- sarTools.probitGibbsSpatial( 
   a.crops, 
   fun=sarTools.probitGibbsSpatialRunConditional,
 
   Beta.init=Beta.init,
   rho.init=rho.init,
+  Z.init=Z.init,
   alpha.sigma.init=alpha.sigma.init,
   tau.init=tau.init,
 
@@ -96,7 +104,7 @@ result <- sarTools.probitGibbsSpatial(
 print( colMeans(result$Beta))
 print( colMeans(result$Rho))
 print( colMeans(result$Tau))
-
+}
 
 if ( F ) {
 # result
@@ -168,14 +176,26 @@ result.can <- sarTools.probitGibbsSpatial2(a.crops,Beta.init,rho.init,Beta0,Sigm
 if( F ) {
 result <- sarTools.probitGibbsSpatial(a.crops, fun=function(...) {} ) 
 
+V <- a.crops$globalError[object.sort,'error']
+K <- length(Z) / length(V)
+U <- kronecker( matrix(1,nrow=K,ncol=1), diag(length(Z)))
+
 thinning <- 25 
 rhos <- c(0)
 start.time <- proc.time()
-for(i in 2:1000) {
-  rhos[i] <- mh.lambda.sar(Z=Z,W=W,mu=X %*% Beta,tau=1,x0=rhos[i-1],iter=1, burnIn=thinning, rho.range=carTools.checkRho(W)) 
+for(i in 2:200) {
+  rhos[i] <- mh.lambda.sar(Z=Z,W=W,mu=X %*% Beta + U %*% V,tau=1,x0=rhos[i-1],iter=1, burnIn=thinning, rho.range=carTools.checkRho(W)) 
 }
 print( proc.time() - start.time)
 plot(rhos)
+
+mhexp <- function(Z,W,mu,tau,rho,K) {
+  Lambda <- kronecker( diag(K), diag(nrow(W)) - rho * W )
+  Y <- Lambda %*% Z - mu
+  result <-  log(det(Lambda)) - 1/2 * t(Y) %*% Y 
+  return(result)
+}
+
 }
 
 

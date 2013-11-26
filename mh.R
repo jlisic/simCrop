@@ -74,6 +74,7 @@ mh.lambda.sar <- function(Z,W,mu,tau,x0,iter,burnIn=50, rho.range) {
 
   x <- x0
   Lambda.x <- diag(n) - x * W
+  Lambda.x.det <- det(Lambda.x)
   
   Z <- matrix(Z,nrow=n)
   mu <- matrix(mu,nrow=n)
@@ -85,29 +86,26 @@ mh.lambda.sar <- function(Z,W,mu,tau,x0,iter,burnIn=50, rho.range) {
   for(i in 1:(iter + burnIn) ) {
     y <- runif(1, min=rho.range[1],max=rho.range[2]) 
     Lambda.y <- diag(n) - y * W
+    Lambda.y.det <- det(Lambda.y)
     Z.adj.y <- Lambda.y %*% Z - mu 
  
     u <- runif(1)
 
     #rho <- min( foo(y) /  foo(x), 1 ) 
-    quadratic.form <-  sum( Z.adj.y*Z.adj.y  - Z.adj.x*Z.adj.x )   
-    
-    if( quadratic.form < 0 ) { 
-      acceptNewProb <- 1
-    } else {
-      rho2 <- exp( -1/2 * tau * sum( Z.adj.y*Z.adj.y  - Z.adj.x*Z.adj.x ) )  
+    det.ratio <- Lambda.y.det / Lambda.x.det #recall tau is constant
+    rho2 <- det.ratio * exp( -1/2 * tau * sum( Z.adj.y*Z.adj.y  - Z.adj.x*Z.adj.x ) )  
       
-      if( is.nan(rho2) ) { 
-        acceptNewProb <- 0
-        acceptNewProb <- min( rho2, 1 )
-      } else {
-        acceptNewProb <- min( rho2, 1 )
-      }
+    if( is.nan(rho2) ) { 
+      acceptNewProb <- 0
+      acceptNewProb <- min( rho2, 1 )
+    } else {
+      acceptNewProb <- min( rho2, 1 )
     }
 
     if (u < acceptNewProb ) {
       x <- y
       Lambda.x <- Lambda.y
+      Lambda.x.det <- Lambda.y.det
       Z.adj.x <- Z.adj.y
     }
 

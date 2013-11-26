@@ -14,8 +14,7 @@ library(mgcv)
 ########################################## INCLUDES ###############################################
 source('mh.R')
 source('simCrop.R')
-
-
+source('minDim.R')
 
 ########################################## FUNCTION ###############################################
 
@@ -395,17 +394,21 @@ sarTools.probitGibbsSpatialRunDouble <- function(Y,states,X,W,Beta.init,rho.init
   
 
 
-sarTools.deviates <- function( rho, W, X, Beta, tau=1) {
+sarTools.deviates <- function( rho, W, X, Beta, Sigma, tau=1) {
   n <- nrow(X)
   if( is.null(n) ) n <- length(X)
   Lambda <- (diag(n) - rho * W)
   Lambda.inv <- solve(Lambda)
 
   print( sprintf( "Simulating with Beta=%f Rho=%f Tau=%f",Beta,rho, tau) )
-  if(is.null(nrow(Beta))) Beta <- matrix(Beta,ncol=1)
-  if(is.null(nrow(X)))    X <- matrix(X,ncol=1)
+  if(minDim(Beta) == 1) Beta <- matrix(Beta,ncol=1)
+  if(minDim(X) == 1)    X <- matrix(X,ncol=1)
+ 
+  # get the dim of W 
+  J <- minDim(W) 
 
-  rhoRange <-carTools.checkRho(W) 
+
+  rhoRange <-carTools.checkRho(W)
   epsilon <- rnorm(n)
   Y <- Lambda.inv %*% (X %*% Beta + epsilon / sqrt(tau) ) 
 
@@ -572,6 +575,11 @@ logpdf.sar <- function(rho,Z,W,Beta,q.value) {
   return( results )
 
 }
+
+
+  
+
+
 
 
 
