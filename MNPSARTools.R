@@ -395,8 +395,7 @@ sarTools.probitGibbsSpatialRunDouble <- function(Y,states,X,W,Beta.init,rho.init
 
 
 sarTools.deviates <- function( rho, W, X, Beta, Sigma, tau=1) {
-  n <- nrow(X)
-  if( is.null(n) ) n <- length(X)
+  n <- nrow(W)
   Lambda <- (diag(n) - rho * W)
   Lambda.inv <- solve(Lambda)
 
@@ -405,18 +404,18 @@ sarTools.deviates <- function( rho, W, X, Beta, Sigma, tau=1) {
   if(minDim(X) == 1)    X <- matrix(X,ncol=1)
   
   rhoRange <-carTools.checkRho(W)
- 
+
+  # if we only have tau we treat each observation individually 
   if( missing(Sigma) ) { 
     epsilon <- rnorm(n)
     Y <- Lambda.inv %*% (X %*% Beta + epsilon / sqrt(tau) ) 
+
+  # if we do have sigma then we repeat the location parameter multiple times
   } else {
     # get the dim of Sigma (so we now how many choices) 
-    J <- minDim(Sigma) 
-    matrix( kronecker(matrix(1,nrow=J,ncol=1), X%*%Beta)
-    Y <- rmvnorm(n,mroot(solve(tau))
-
-    epsilon <- matrix(rnorm(n*J)) %*% solve tau
-    Y <- Lambda.inv %*% (X %*% Beta + epsilon %*% solve(tau) ) 
+    J <- minDim(Sigma)
+    Y <-  matrix( c( t( Lambda.inv %*% rmvnorm(n,sigma=Sigma) )),ncol=1)
+    Y <-  kronecker(Lambda.inv, diag(J)) %*% X %*% Beta + Y 
   }
 
   # sanity checks
@@ -426,6 +425,7 @@ sarTools.deviates <- function( rho, W, X, Beta, Sigma, tau=1) {
 
   return( Y ) 
 }
+
 
 
 
