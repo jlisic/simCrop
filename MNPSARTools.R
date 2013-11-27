@@ -204,7 +204,6 @@ sarTools.probitGibbsSpatialRunConditional <- function(
 
     for(l in 1:thinning) {
 
-
       ## 1. generate rho1 deviate
       mu <- X %*% Beta + U%*%V
       #rho1 <- mh.lambda.sar(Z=Z,W=W,mu=mu,tau=1,x0=rho1,iter=1,burnIn=25,rho.range=rho.range)
@@ -222,7 +221,7 @@ sarTools.probitGibbsSpatialRunConditional <- function(
       Lambda1.K <- kronecker(diag(K), Lambda1)
       Lambda1.K.inv <- kronecker(diag(K), solve(Lambda1)) 
       Sigma1.K.inv <- kronecker(diag(K), Sigma1.inv) 
-
+      
       ## 3. generate tau deviate
       #tau <- rgamma(1, shape = Gamma0[1] + n/2, rate= Gamma0[2] + t(V) %*% Sigma2.inv %*% V / 2 )
 
@@ -238,7 +237,8 @@ sarTools.probitGibbsSpatialRunConditional <- function(
 
       ## 5. generate deviates for the random effect latent variables
       Sigma2.cond <- solve(UU + Sigma2.inv )
-      V <- matrix( rmvnorm(1, mean= Sigma2.cond %*% t(U) %*%(Lambda1.K %*% Z - X%*%Beta), sigma=Sigma2.cond),  ncol=1)
+      muV <- Sigma2.cond %*% t(U) %*%(Lambda1.K %*% Z - X%*%Beta)
+      V <- matrix( rmvnorm(1, mean= muV, sigma=Sigma2.cond),  ncol=1)
       
       ## 6. generate deviates for the truncated latent variables
       muZ <- Lambda1.K.inv %*% (X %*% Beta + U %*% V)   

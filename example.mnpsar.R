@@ -62,14 +62,11 @@ for(i in 2:5) {
 
 ## useful for debugging
 object.sort <- sort(a.crops$cropType[,'myObjects'],index.return=T)$ix
-Z <- a.crops$cropValue[,1]
-E <- a.crops$globalError[,2]
 
-Z1 <- matrix( Z, nrow=2)[1,object.sort]   
-Z2 <- matrix( Z, nrow=2)[2,object.sort]   
+Z <- matrix( t(a.crops$cropValue), nrow=length(object.sort), byrow=T)[object.sort,]
+Z <- matrix( Z, nrow=nrow(a.crops$cropValue), byrow=T)
+Z <- matrix( Z, ncol=1)
 
-E1 <- matrix( E, nrow=2)[1,object.sort]   
-E2 <- matrix( E, nrow=2)[2,object.sort]   
 
 #### inits
 ##Beta.init <- c(0,0)
