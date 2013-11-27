@@ -41,9 +41,8 @@ iter <- 2
 thinning <- 20
 burnIn <- 0 
 m <- 10 
-tau <- c(1,10)
 
-Sigma.Annual <- diag(2)
+Sigma.Annual <- matrix( c(1,0,0,1), nrow=2,byrow=T)
 Sigma.Environment <- matrix( c(1,0,0,1), nrow=2,byrow=T)
 
 # create a 2x2 section set of quarter-quarter sections (QQS)
@@ -74,44 +73,43 @@ E2 <- matrix( E, nrow=2)[2,object.sort]
 
 #### inits
 ##Beta.init <- c(0,0)
-#Beta.init <- Beta 
-#rho.init <- c( -.15, .20)
-##alpha.sigma.init <- matrix(0,nrow(W),ncol=1)
-#alpha.sigma.init <- a.crops$globalError[object.sort,'error']
-#tau.init <- tau[2] 
-#Z.init <- c(a.crops$cropValue[object.sort,]) - c(alpha.sigma.init)
+beta.init <- Beta 
+rho.init <- c( -.15, .20)
+Sigma.init <- list( Sigma.Annual, Sigma.Environment)
+alpha.init <- matrix(0,nrow=nrow(W)*dim(Sigma.init[[2]]),ncol=1)
+Z.init <- matrix(0,nrow=nrow(W)*dim(Sigma.init[[1]])*(nrow(a.crops$cropType) - 2),ncol=1)
 #
 #### hyper params
-#Beta0 <- c(0,0) 
-#Sigma0 <- c(2,2) 
-#Gamma0 <- c(1,1/2)
-#
+Beta0 <- c(0,0,0) 
+Sigma0 <- c(2,2,2) 
+Gamma0 <- c(1,1/2) # not likely to be used
+
 
 #
-#if ( F ) {
-#result <- sarTools.probitGibbsSpatial( 
-#  a.crops, 
-#  fun=sarTools.probitGibbsSpatialRunConditional,
-#
-#  Beta.init=Beta.init,
-#  rho.init=rho.init,
-#  Z.init=Z.init,
-#  alpha.sigma.init=alpha.sigma.init,
-#  tau.init=tau.init,
-#
+if ( T ) {
+result <- sarTools.probitGibbsSpatial( 
+  a.crops, 
+  fun=sarTools.probitGibbsSpatialRunConditional,
+
+  beta.init=beta.init,
+  rho.init=rho.init,
+  Z.init=Z.init,
+  alpha.init=alpha.init,
+  Sigma.init=Sigma.init,
+
 ##hyper parameters
-#  Beta0=Beta0,
-#  Sigma0=Sigma0,
-#  Gamma0=Gamma0, # shape and rate
+  Beta0=Beta0,
+  Sigma0=Sigma0,
+  Gamma0=Gamma0, # shape and rate
 ##runtime params
-#  iter=iter,
-#  m=m,         # thinning for Y
-#  thinning=thinning,  # thinning
-#  burnIn=burnIn     # burnIn
-#  )
-#
+  iter=iter,
+  m=m,         # thinning for Y
+  thinning=thinning,  # thinning
+  burnIn=burnIn     # burnIn
+  )
+
 #print( colMeans(result$Beta))
 #print( colMeans(result$Rho))
 #print( colMeans(result$Tau))
-#}
+}
 #

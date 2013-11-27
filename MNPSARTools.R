@@ -122,11 +122,11 @@ sarTools.probitGibbsSpatialRunConditional <- function(
   X,
   W,
 #init parameters
-  Beta.init,
+  beta.init,
   rho.init,
   Z.init,
   alpha.init,
-  sigma.init, # list
+  Sigma.init, # list
 #hyper parameters
   Beta0,
   Sigma0,
@@ -147,13 +147,13 @@ sarTools.probitGibbsSpatialRunConditional <- function(
   Beta.n <- nrow(Beta0)
   
   # set initial conditions
-  Beta <- Beta.init
+  Beta <- beta.init
   rho1 <- rho.init[1]
   rho2 <- rho.init[2] 
-  Sigma1 <- sigma.init[[1]]
-  Sigma2 <- sigma.init[[2]]
-  Z    <- Z.init
-  V <- alpha.sigma.init
+  Sigma1 <- Sigma.init[[1]]
+  Sigma2 <- Sigma.init[[2]]
+  Z <- Z.init
+  V <- alpha.init
 
   #init some values
   NJ <- nrow(X)    # number of observations (times J*K )
@@ -165,7 +165,7 @@ sarTools.probitGibbsSpatialRunConditional <- function(
 
   # take care of Y
   Y.lower <- rep(0,times=NJ) 
-  Y.constraints <- 
+  Y.constraints <- diag(lapply( Y , function(x) DMat(J,x)))
 
   # things to save
   Beta.save <- matrix(0,nrow=iter,ncol=length(Beta))  # Beta values
@@ -413,47 +413,58 @@ sarTools.generateCropTypes <- function(a, p, rho, X, Beta, Sigma.list) {
 
 
 
+DMat <- function( J, j ) {
+
+  if( J <= 3 ) {
+
+    DMatrix <-  list(
+        matrix( 1,nrow=1),
+
+        matrix( c(
+                  -1,  0,
+                   0, -1, 
+                  
+                   1,  0,
+                   1, -1,
+
+                  -1,  1,  
+                   0,  1), ncol=2, byrow=T),
+
+        matrix( c( 
+                  -1,  0,  0,
+                   0, -1,  0,
+                   0,  0, -1,
+                  
+                   1, -1,  0,   
+                   1,  0, -1,   
+                   1,  0,  0,
+
+                  -1,  1,  0,    
+                   0,  1, -1,    
+                   0,  1,  0,
+
+                  -1,  0,  1,    
+                   0, -1,  1,    
+                   0,  0,  1), ncol=3, byrow=T)
+        )
+
+
+    if( missing(j) ) { 
+      return( DMatrix[[J]] ) 
+    } else {
+      return( (DMatrix[[J]])[ ((j-1)*J +1):(J*j),] )
+    }
+
+  } 
+
+  print("Not Yet Implemented")
+}
+
 
 # applyGroup
 applyGroup <- function( X, J ) {
-
-  ## get the groups
-  # need to create a function that does this on demand
-
-
-  DMat <-  list(
-          matrix( 1,nrow=1),
-
-          matrix( c(
-                    -1,  0,
-                     0, -1, 
-                    
-                     1,  0,
-                     1, -1,
-
-                    -1,  1,  
-                     0,  1), ncol=2, byrow=T),
-
-          matrix( c( 
-                    -1,  0,  0,
-                     0, -1,  0,
-                     0,  0, -1,
-                    
-                     1, -1,  0,   
-                     1,  0, -1,   
-                     1,  0,  0,
-
-                    -1,  1,  0,    
-                     0,  1, -1,    
-                     0,  1,  0,
-
-                    -1,  0,  1,    
-                     0, -1,  1,    
-                     0,  0,  1), ncol=3, byrow=T)
-          )
-
    # create a matrix of True and Falses for which category the latent variable falls in
-   X.category <- matrix( colSums(matrix(matrix(DMat[[J]] %*% matrix( X, nrow=J) > 0, nrow=J*(J+1) ),nrow=J)) == J, nrow=J+1)  
+   X.category <- matrix( colSums(matrix(matrix(DMat(J) %*% matrix( X, nrow=J) > 0, nrow=J*(J+1) ),nrow=J)) == J, nrow=J+1)  
    X.category <<- X.category
    return( unlist( apply(X.category, 2, which) ))
 }
