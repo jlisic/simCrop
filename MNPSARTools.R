@@ -157,7 +157,7 @@ sarTools.probitGibbsSpatialRunConditional <- function(
 
   #init some values
   NJ <- nrow(X)    # number of observations (times J*K )
-  N <- nrow(Y)     # number of observations * K
+  N <- length(Y)     # number of observations * K
   n <- nrow(W)     # number of observations within a year 
   K <- N / n       # number of years
   p <- ncol(X)     # number of covariates
@@ -165,7 +165,9 @@ sarTools.probitGibbsSpatialRunConditional <- function(
 
   # take care of Y
   Y.lower <- rep(0,times=NJ) 
-  Y.constraints <- diag(lapply( Y , function(x) DMat(J,x)))
+  Y.constraints <- bdiag(lapply( Y , function(x) DMat(J,x)))
+
+  Y.constraints <<- Y.constraints
 
   # things to save
   Beta.save <- matrix(0,nrow=iter,ncol=length(Beta))  # Beta values
@@ -173,14 +175,12 @@ sarTools.probitGibbsSpatialRunConditional <- function(
   Sigma1.save <- matrix(0,nrow=iter,ncol=length(Sigma1))                # proportion parameter for variances
   Sigma2.save <- matrix(0,nrow=iter,ncol=length(Sigma2))                # proportion parameter for variances
   V.save <- c()
-  Y.save <- c()
+  Z.save <- c()
 
   rho.range <- sort( 1/range(eigen(W)$values) )
 
   # create U matrix  1_K \otimes (diag(n) \otimes 1_J)
-  U <- kronecker(matrix(1,ncol=1,nrow=K),kronecker(diag(n),matrix(1,ncol=1,nrow=J)))
-
-U <<- U
+  U <- kronecker(matrix(1,ncol=1,nrow=K),diag(n*J))
 
   UU <- t(U) %*% U 
   XX <- t(X) %*% X 
@@ -196,7 +196,7 @@ U <<- U
   # the mcmc loop
   for(i in 1:(iter+burnIn) ) {
 
-    if(i %% 100 == 0) {
+    if(i %% 10 == 0) {
       print(proc.time() - last.time)
       print(i)
       last.time <- proc.time()
@@ -242,7 +242,7 @@ U <<- U
       
       ## 6. generate deviates for the truncated latent variables
       muZ <- Lambda1.K.inv %*% (X %*% Beta + U %*% V)   
-      Z <- matrix( rtmvnorm( n=1, mean=c(muZ),H=Sigma1.K.inv, lower=Y.lower, D=Y.constraints, algorithm="gibbs",burn.in.samples=m), ncol=1)
+      Z <- matrix( rtmvnorm( n=1, mean=c(muZ),H=Sigma1.K.inv, lower=Y.lower, D=as.matrix(Y.constraints), algorithm="gibbs",burn.in.samples=m), ncol=1)
 
 
     } # finish thinning 

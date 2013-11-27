@@ -37,7 +37,7 @@ Beta.sim.soy   <- 2
 Beta.sim.other <- 1 
 Beta <- matrix( c( Beta.sim.corn, Beta.sim.soy, Beta.sim.other ),ncol=1)
 
-iter <- 2 
+iter <- 100 
 thinning <- 20
 burnIn <- 0 
 m <- 10 
@@ -76,8 +76,8 @@ E2 <- matrix( E, nrow=2)[2,object.sort]
 beta.init <- Beta 
 rho.init <- c( -.15, .20)
 Sigma.init <- list( Sigma.Annual, Sigma.Environment)
-alpha.init <- matrix(0,nrow=nrow(W)*dim(Sigma.init[[2]]),ncol=1)
-Z.init <- matrix(0,nrow=nrow(W)*dim(Sigma.init[[1]])*(nrow(a.crops$cropType) - 2),ncol=1)
+alpha.init <- matrix(0,nrow=nrow(W)*minDim(Sigma.init[[2]]),ncol=1)
+Z.init <- matrix(0,nrow=nrow(W)*minDim(Sigma.init[[1]])*(ncol(a.crops$cropType) - 2),ncol=1)
 #
 #### hyper params
 Beta0 <- c(0,0,0) 
