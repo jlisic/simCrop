@@ -81,6 +81,9 @@ simSample <- function( m, theta) {
 
 sarTools.probitGibbsSpatial <- function( a, fun, ... ) {
 
+  # number of alternatives
+  J <- length(a.crops$crops) - 1
+
   myObjects <- a$cropType[,'myObjects']
   myObjects.sort <- sort( myObjects, index.return=T)$ix
   priorYears <- ncol( a$cropType) - 2  
@@ -91,12 +94,12 @@ sarTools.probitGibbsSpatial <- function( a, fun, ... ) {
   Y.sort <- matrix(1:length(Y),ncol=priorYears)
   Y.sort <- c(Y.sort[myObjects.sort,])
   Y <- Y[Y.sort]
-  Y <- matrix(Y,ncol=1) 
   Y <<- Y
 
   # take care of X
   X <- sarTools.priorStateDesignMatrix(a)
   X <- X[ Y.sort, ]
+  X <- kronecker( X, matrix(1,nrow=J,ncol=1) )
   X <<- X
 
   # take care of W  
@@ -153,34 +156,37 @@ sarTools.probitGibbsSpatialRunConditional <- function(
   V <- alpha.sigma.init
 
   #init some values
-  N <- nrow(Y)     # number of observations
+  NJ <- nrow(X)    # number of observations (times J*K )
+  N <- nrow(Y)     # number of observations * K
   n <- nrow(W)     # number of observations within a year 
   K <- N / n       # number of years
   p <- ncol(X)     # number of covariates
-
+  J <- NJ / N 
 
   # take care of Y
-  Y.upper <- rep(0,times=N) 
-  Y.lower <- Y.upper 
-  Y.upper[ Y == states[1] ] <- Inf 
-  Y.lower[ Y == states[2] ] <- -Inf 
+  Y.lower <- rep(0,times=NJ) 
+  Y.constraints <- 
 
-
+  # things to save
   Beta.save <- matrix(0,nrow=iter,ncol=length(Beta))  # Beta values
   rho.save <- matrix(0,nrow=iter,ncol=2)              # rho values
   Sigma1.save <- matrix(0,nrow=iter,ncol=length(Sigma1))                # proportion parameter for variances
   Sigma2.save <- matrix(0,nrow=iter,ncol=length(Sigma2))                # proportion parameter for variances
+  V.save <- c()
+  Y.save <- c()
 
   rho.range <- sort( 1/range(eigen(W)$values) )
 
-  # create U matrix
-  U <- kronecker(matrix(1,ncol=1,nrow=K),diag(n))
+  # create U matrix  1_K \otimes (diag(n) \otimes 1_J)
+  U <- kronecker(matrix(1,ncol=1,nrow=K),kronecker(diag(n),matrix(1,ncol=1,nrow=J)))
+
+U <<- U
 
   UU <- t(U) %*% U 
   XX <- t(X) %*% X 
 
   # static mu (zero) value for rho2
-  mu2 <- matrix(0,ncol=1,nrow=n)
+  mu2 <- matrix(0,ncol=1,nrow=n*J)
 
   # inverse of the prior variance
   S.inv <- diag( c(1/Sigma0^2) )
@@ -201,21 +207,21 @@ sarTools.probitGibbsSpatialRunConditional <- function(
 
       ## 1. generate rho1 deviate
       mu <- X %*% Beta + U%*%V
-      rho1 <- mh.lambda.sar(Z=Z,W=W,mu=mu,tau=1,x0=rho1,iter=1,burnIn=25,rho.range=rho.range)
+      #rho1 <- mh.lambda.sar(Z=Z,W=W,mu=mu,tau=1,x0=rho1,iter=1,burnIn=25,rho.range=rho.range)
 
       ## 2. generate rho2 deviate
-      rho2 <- mh.lambda.sar(Z=V,W=W,mu=mu2,tau=tau,x0=rho2,iter=1,burnIn=25,rho.range=rho.range)
+      #rho2 <- mh.lambda.sar(Z=V,W=W,mu=mu2,tau=tau,x0=rho2,iter=1,burnIn=25,rho.range=rho.range)
    
       # update step 
-      Lambda1 <- diag(n) - rho1 * W
-      Lambda2 <- diag(n) - rho2 * W 
+      Lambda1 <- kronecker( diag(n) - rho1 * W, diag(J))
+      Lambda2 <- kronecker( diag(n) - rho2 * W, diag(J)) 
 
-      Sigma1.inv <- t(Lambda1) %*% Lambda1 
-      Sigma2.inv <- t(Lambda2) %*% Lambda2
+      Sigma1.inv <- Lambda1 %*% kronecker(diag(n), solve(Sigma1)) %*% Lambda1 
+      Sigma2.inv <- Lambda2 %*% kronecker(diag(n), solve(Sigma2)) %*% Lambda2
       
       Lambda1.K <- kronecker(diag(K), Lambda1)
       Lambda1.K.inv <- kronecker(diag(K), solve(Lambda1)) 
-      Sigma1.K.inv <- kronecker(diag(K), Lambda1 %*% Lambda1) 
+      Sigma1.K.inv <- kronecker(diag(K), Sigma1.inv) 
 
       ## 3. generate tau deviate
       #tau <- rgamma(1, shape = Gamma0[1] + n/2, rate= Gamma0[2] + t(V) %*% Sigma2.inv %*% V / 2 )
@@ -223,31 +229,33 @@ sarTools.probitGibbsSpatialRunConditional <- function(
       ## 4. generate new Beta
 
       # variance of the posterior distribution of Beta
-      Beta.post.var <- solve( S.inv + XX ) 
+      #Beta.post.var <- solve( S.inv + XX ) 
      
       # mean of the posterior distribution of Beta
-      Beta.post.mean <- Beta.post.var %*% ( t(X) %*% (Lambda1.K %*% Z - U%*%V)  + S.inv %*% Beta0)
+      #Beta.post.mean <- Beta.post.var %*% ( t(X) %*% (Lambda1.K %*% Z - U%*%V)  + S.inv %*% Beta0)
  
-      Beta <- matrix(rmvnorm(n=1,mean=Beta.post.mean,sigma=Beta.post.var),ncol=1)
+      #Beta <- matrix(rmvnorm(n=1,mean=Beta.post.mean,sigma=Beta.post.var),ncol=1)
 
       ## 5. generate deviates for the random effect latent variables
-      Sigma2.cond <- solve(UU + Sigma2.inv*tau)
+      Sigma2.cond <- solve(UU + Sigma2.inv )
       V <- matrix( rmvnorm(1, mean= Sigma2.cond %*% t(U) %*%(Lambda1.K %*% Z - X%*%Beta), sigma=Sigma2.cond),  ncol=1)
       
       ## 6. generate deviates for the truncated latent variables
       muZ <- Lambda1.K.inv %*% (X %*% Beta + U %*% V)   
-      Z <- matrix( rtmvnorm( n=1, mean=c(muZ),H=Sigma1.K.inv, lower=Y.lower, upper=Y.upper,algorithm="gibbs",burn.in.samples=m), ncol=1)
+      Z <- matrix( rtmvnorm( n=1, mean=c(muZ),H=Sigma1.K.inv, lower=Y.lower, D=Y.constraints, algorithm="gibbs",burn.in.samples=m), ncol=1)
 
 
-    } 
+    } # finish thinning 
     Beta.save[i - burnIn,] <- Beta  # save our result
     rho.save[i -  burnIn,1] <- rho1
     rho.save[i -  burnIn,2] <- rho2 
     Sigma1.save[i -  burnIn,] <- Sigma1 
     Sigma2.save[i -  burnIn,] <- Sigma2 
-  }
-  print(proc.time() - last.time)
+    V.save <- cbind(V.save,V)
+    Z.save <- cbind(Z.save,Z)
+  } # finish iteration
 
+  return( list( Beta = Beta.save, Rho = rho.save,  Sigma1 = Sigma1.save, Sigma2 = Sigma2.save, V = V.save, Z = Z.save) )
 }
 
 
