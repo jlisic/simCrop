@@ -72,6 +72,45 @@ simSample <- function( m, theta) {
 }
 
 
+
+
+## probit Gibbs function ## 
+# Y vector of categorical responses in row major form, repeating for each year, length = (number of years) x fieldSize
+# X matrix of covariates  in row major form, repeating for each year, length = (number of years) x fieldSize
+# W matrix in row major form of spatial neighborhoods, dim is fieldSize x fieldSize
+
+sarTools.probitGibbsSpatial <- function( a, fun, ... ) {
+
+  myObjects <- a$cropType[,'myObjects']
+  myObjects.sort <- sort( myObjects, index.return=T)$ix
+  priorYears <- ncol( a$cropType) - 2  
+
+  # take care of Y
+  Y <- matrix(a$cropType[,c(-1,-2)],ncol=priorYears)
+  
+  Y.sort <- matrix(1:length(Y),ncol=priorYears)
+  Y.sort <- c(Y.sort[myObjects.sort,])
+  Y <- Y[Y.sort]
+  Y <- matrix(Y,ncol=1) 
+  Y <<- Y
+
+  # take care of X
+  X <- sarTools.priorStateDesignMatrix(a)
+  X <- X[ Y.sort, ]
+  X <<- X
+
+  # take care of W  
+  W <- simCrop.createRookDist(a)
+
+  # run the function
+  result <- fun( Y=Y, states=a$crops, X=X, W=W, ... )
+
+  return( result)
+}
+
+
+
+
 # a sensible conditional SAR model
 sarTools.probitGibbsSpatialRunConditional <- function(
 # parameters (these are provided by sarTools.probitGibbsSpatial)
@@ -83,8 +122,8 @@ sarTools.probitGibbsSpatialRunConditional <- function(
   Beta.init,
   rho.init,
   Z.init,
-  alpha.sigma.init,
-  tau.init,
+  alpha.init,
+  sigma.init, # list
 #hyper parameters
   Beta0,
   Sigma0,
@@ -108,7 +147,8 @@ sarTools.probitGibbsSpatialRunConditional <- function(
   Beta <- Beta.init
   rho1 <- rho.init[1]
   rho2 <- rho.init[2] 
-  tau  <- tau.init
+  Sigma1 <- sigma.init[[1]]
+  Sigma2 <- sigma.init[[2]]
   Z    <- Z.init
   V <- alpha.sigma.init
 
@@ -128,7 +168,8 @@ sarTools.probitGibbsSpatialRunConditional <- function(
 
   Beta.save <- matrix(0,nrow=iter,ncol=length(Beta))  # Beta values
   rho.save <- matrix(0,nrow=iter,ncol=2)              # rho values
-  tau.save <- matrix(0,nrow=iter,ncol=1)                # proportion parameter for variances
+  Sigma1.save <- matrix(0,nrow=iter,ncol=length(Sigma1))                # proportion parameter for variances
+  Sigma2.save <- matrix(0,nrow=iter,ncol=length(Sigma2))                # proportion parameter for variances
 
   rho.range <- sort( 1/range(eigen(W)$values) )
 
@@ -177,7 +218,7 @@ sarTools.probitGibbsSpatialRunConditional <- function(
       Sigma1.K.inv <- kronecker(diag(K), Lambda1 %*% Lambda1) 
 
       ## 3. generate tau deviate
-      tau <- rgamma(1, shape = Gamma0[1] + n/2, rate= Gamma0[2] + t(V) %*% Sigma2.inv %*% V / 2 )
+      #tau <- rgamma(1, shape = Gamma0[1] + n/2, rate= Gamma0[2] + t(V) %*% Sigma2.inv %*% V / 2 )
 
       ## 4. generate new Beta
 
@@ -202,7 +243,8 @@ sarTools.probitGibbsSpatialRunConditional <- function(
     Beta.save[i - burnIn,] <- Beta  # save our result
     rho.save[i -  burnIn,1] <- rho1
     rho.save[i -  burnIn,2] <- rho2 
-    tau.save[i -  burnIn,1] <- tau 
+    Sigma1.save[i -  burnIn,] <- Sigma1 
+    Sigma2.save[i -  burnIn,] <- Sigma2 
   }
   print(proc.time() - last.time)
 
@@ -363,11 +405,12 @@ sarTools.generateCropTypes <- function(a, p, rho, X, Beta, Sigma.list) {
 
 
 
+
 # applyGroup
 applyGroup <- function( X, J ) {
 
-## get the groups
-# need to create a function that does this on demand
+  ## get the groups
+  # need to create a function that does this on demand
 
 
   DMat <-  list(
@@ -428,6 +471,8 @@ sarCheck <- function( rho, Y, X, Beta, W, Sigma, H ) {
     
   return( as.numeric( -1 * ( .5 * log( det(Lambda %*% H %*% Lambda)  )    -1/2 * t(Z) %*% H %*%Z ))  )
 }
+
+
 
 
 # this function performs mh sampler on either rho1 or rho2,
