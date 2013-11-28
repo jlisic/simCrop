@@ -29,6 +29,7 @@ set.seed(400)
 
 # ratio of corn and soybeans
 p <- c(.4, .4, .2)
+J <- length(p) - 1
 
 # parameters 
 rho <- c(-.15,.20)
@@ -37,7 +38,7 @@ Beta.sim.soy   <- 2
 Beta.sim.other <- 1 
 Beta <- matrix( c( Beta.sim.corn, Beta.sim.soy, Beta.sim.other ),ncol=1)
 
-iter <- 100 
+iter <- 1000 
 thinning <- 20
 burnIn <- 0 
 m <- 10 
@@ -61,12 +62,20 @@ for(i in 2:5) {
 
 
 ## useful for debugging
-object.sort <- sort(a.crops$cropType[,'myObjects'],index.return=T)$ix
+myObjects <- a.crops$cropType[,'myObjects']
+object.sort <- sort(myObjects,index.return=T)$ix
 
-Z <- matrix( t(a.crops$cropValue), nrow=length(object.sort), byrow=T)[object.sort,]
-Z <- matrix( Z, nrow=nrow(a.crops$cropValue), byrow=T)
+Z <- matrix( t(a.crops$cropValue), ncol=length(object.sort) )[,object.sort]
+Z <- t( matrix( Z, ncol=ncol(a.crops$cropValue)*J ) )
 Z <- matrix( Z, ncol=1)
 
+V <- matrix( a.crops$globalError[,'error'], ncol=length(object.sort) )[,object.sort]
+V <- matrix( V, ncol=1)
+
+V2 <- rep(V,length=length(Z))
+
+
+Z <- Z - V2
 
 #### inits
 ##Beta.init <- c(0,0)

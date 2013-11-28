@@ -78,7 +78,6 @@ simSample <- function( m, theta) {
 # Y vector of categorical responses in row major form, repeating for each year, length = (number of years) x fieldSize
 # X matrix of covariates  in row major form, repeating for each year, length = (number of years) x fieldSize
 # W matrix in row major form of spatial neighborhoods, dim is fieldSize x fieldSize
-
 sarTools.probitGibbsSpatial <- function( a, fun, ... ) {
 
   # number of alternatives
