@@ -38,7 +38,7 @@ Beta.sim.soy   <- 2
 Beta.sim.other <- 1 
 Beta <- matrix( c( Beta.sim.corn, Beta.sim.soy, Beta.sim.other ),ncol=1)
 
-iter <- 1000 
+iter <- 3 
 thinning <- 20
 burnIn <- 0 
 m <- 10 

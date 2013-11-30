@@ -181,8 +181,6 @@ sarTools.probitGibbsSpatialRunConditional <- function(
   # create U matrix  1_K \otimes (diag(n) \otimes 1_J)
   U <- kronecker(matrix(1,ncol=1,nrow=K),diag(n*J))
 
-  UU <- t(U) %*% U 
-  XX <- t(X) %*% X 
 
   # static mu (zero) value for rho2
   mu2 <- matrix(0,ncol=1,nrow=n*J)
@@ -214,12 +212,21 @@ sarTools.probitGibbsSpatialRunConditional <- function(
       Lambda1 <- kronecker( diag(n) - rho1 * W, diag(J))
       Lambda2 <- kronecker( diag(n) - rho2 * W, diag(J)) 
 
-      Sigma1.inv <- Lambda1 %*% kronecker(diag(n), solve(Sigma1)) %*% Lambda1 
-      Sigma2.inv <- Lambda2 %*% kronecker(diag(n), solve(Sigma2)) %*% Lambda2
+      S1.inv <- kronecker( diag(n), solve(Sigma1) )
+      S2.inv <- kronecker( diag(n), solve(Sigma2) )
+
+      S1.K.inv <- kronecker( diag(K), S1.inv ) 
+
+      Sigma1.inv <- Lambda1 %*% S1.inv %*% Lambda1 
+      Sigma2.inv <- Lambda2 %*% S2.inv %*% Lambda2
       
       Lambda1.K <- kronecker(diag(K), Lambda1)
       Lambda1.K.inv <- kronecker(diag(K), solve(Lambda1)) 
       Sigma1.K.inv <- kronecker(diag(K), Sigma1.inv) 
+ 
+
+      XX <- t(X) %*% S1.K.inv %*% X 
+      UU <- t(U) %*% S1.K.inv %*%  U 
       
       ## 3. generate tau deviate
       #tau <- rgamma(1, shape = Gamma0[1] + n/2, rate= Gamma0[2] + t(V) %*% Sigma2.inv %*% V / 2 )
@@ -230,18 +237,31 @@ sarTools.probitGibbsSpatialRunConditional <- function(
       #Beta.post.var <- solve( S.inv + XX ) 
      
       # mean of the posterior distribution of Beta
-      #Beta.post.mean <- Beta.post.var %*% ( t(X) %*% (Lambda1.K %*% Z - U%*%V)  + S.inv %*% Beta0)
+      #Beta.post.mean <- Beta.post.var %*% ( t(X) %*% S1.K.inv %*% (Lambda1.K %*% Z - U%*%V)  + S.inv %*% Beta0)
  
       #Beta <- matrix(rmvnorm(n=1,mean=Beta.post.mean,sigma=Beta.post.var),ncol=1)
 
+      print(Beta)
+
       ## 5. generate deviates for the random effect latent variables
       Sigma2.cond <- solve(UU + Sigma2.inv )
-      muV <- Sigma2.cond %*% t(U) %*%(Lambda1.K %*% Z - X%*%Beta)
+      #muV <- Sigma2.cond %*% t(U) %*%(Lambda1.K %*% Z - X%*%Beta)
+      muV <- Sigma2.cond %*% t(U) %*% Sigma1.K.inv %*% (Z - Lambda1.K.inv %*% X%*%Beta)
       V <- matrix( rmvnorm(1, mean= muV, sigma=Sigma2.cond),  ncol=1)
-      
+
+print( sprintf("meanV %f", mean(V)))
+if( !is.nan(mean(V))) {
+  V1 <<- V
+}
+
+
       ## 6. generate deviates for the truncated latent variables
       muZ <- Lambda1.K.inv %*% (X %*% Beta + U %*% V)   
+print(dim(muZ))
+print(length(Y.lower))
+
       Z <- matrix( rtmvnorm( n=1, mean=c(muZ),H=Sigma1.K.inv, lower=Y.lower, D=as.matrix(Y.constraints), algorithm="gibbs",burn.in.samples=m), ncol=1)
+print( sprintf("meanZ %f", mean(Z)))
 
 
     } # finish thinning 
