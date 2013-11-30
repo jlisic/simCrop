@@ -38,7 +38,7 @@ Beta.sim.soy   <- 2
 Beta.sim.other <- 1 
 Beta <- matrix( c( Beta.sim.corn, Beta.sim.soy, Beta.sim.other ),ncol=1)
 
-iter <- 3 
+iter <- 30 
 thinning <- 20
 burnIn <- 0 
 m <- 10 
@@ -55,6 +55,7 @@ a.init <- simCrop.getNeighbors(a.init)
 W <- simCrop.createRookDist(a.init) 
 
 # simulate 10 years of data
+
 a.crops <- sarTools.generateCropTypes(a.init, rho=rho, Beta=Beta, Sigma.list= list(Sigma.Annual, Sigma.Environment) ) 
 for(i in 2:5) {
   a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, Beta=Beta, Sigma.list=list(Sigma.Annual) ) 
@@ -114,7 +115,7 @@ result <- sarTools.probitGibbsSpatial(
   burnIn=burnIn     # burnIn
   )
 
-#print( colMeans(result$Beta))
+print( colMeans(result$Beta))
 #print( colMeans(result$Rho))
 #print( colMeans(result$Tau))
 }
