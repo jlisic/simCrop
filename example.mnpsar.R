@@ -47,7 +47,7 @@ Sigma.Annual <- matrix( c(1,0,0,1), nrow=2,byrow=T)
 Sigma.Environment <- matrix( c(1,0,0,1), nrow=2,byrow=T)
 
 # create a 2x2 section set of quarter-quarter sections (QQS)
-a <- simCrop.partitionPLSS(1,1)
+a <- simCrop.partitionPLSS(3,3)
 
 # add initial crop assignment
 a.init <- simCrop.generateCropTypes(a,p)

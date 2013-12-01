@@ -232,7 +232,11 @@ sarTools.probitGibbsSpatialRunConditional <- function(
       #tau <- rgamma(1, shape = Gamma0[1] + n/2, rate= Gamma0[2] + t(V) %*% Sigma2.inv %*% V / 2 )
 
       ## 4. generate new Beta
-
+      # L = Lambda1, O - Sigma1.inv
+      # B = Beta0
+      # t(z - L.inv xb - L.inv ua)LOL(z - L.inv xb - L.inv ua) + t(B - b)S.inv(b-B) 
+      # t(x) O x  + S.inv 
+      # S.inv B + t(x) L.inv LOL( z - L.inv ua) = S.inv B + t(x) O ( L z - ua)
 
       # variance of the posterior distribution of Beta
       Beta.post.var <- solve( S.inv + XX ) 
@@ -254,11 +258,19 @@ sarTools.probitGibbsSpatialRunConditional <- function(
       muV <- Sigma2.cond %*% t(U) %*% S1.K.inv %*% (Lambda1.K %*% Z - X%*%Beta)
       V <- matrix( rmvnorm(1, mean= muV, sigma=Sigma2.cond),  ncol=1)
 
+if( is.nan(mean(V)) ) {
+  return( list( Beta = Beta.save, Rho = rho.save,  Sigma1 = Sigma1.save, Sigma2 = Sigma2.save, V = V.save, Z = Z.save) )
+} 
+
+
       ## 6. generate deviates for the truncated latent variables
       muZ <- Lambda1.K.inv %*% (X %*% Beta + U %*% V)   
 
       Z <- matrix( rtmvnorm( n=1, mean=c(muZ),H=Sigma1.K.inv, lower=Y.lower, D=as.matrix(Y.constraints), algorithm="gibbs",burn.in.samples=m), ncol=1)
 
+if( is.nan(mean(Z)) ) {
+  return( list( Beta = Beta.save, Rho = rho.save,  Sigma1 = Sigma1.save, Sigma2 = Sigma2.save, V = V.save, Z = Z.save) )
+} 
 
     } # finish thinning 
     Beta.save[i - burnIn,] <- Beta  # save our result
