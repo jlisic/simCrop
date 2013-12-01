@@ -414,11 +414,16 @@ sarTools.generateCropTypes <- function(a, p, rho, X, Beta, Sigma.list) {
 
   # take care of global error
   if( length(Sigma.list) == 2 ) {
-    globalError <- sarTools.deviates( rho=rho[2], W=W,X=matrix(1,ncol=1,nrow=nrow(W)*J),Beta=0, Sigma=Sigma.list[[2]])
+    Lambda <- kronecker( solve(diag(nrow(W)) - rho[1]* W),diag(J))  
 
+    globalError <- sarTools.deviates( rho=rho[2], W=W,X=matrix(1,ncol=1,nrow=nrow(W)*J),Beta=0, Sigma=Sigma.list[[2]])
     a$globalError <- cbind( rep( a$neighbors[,1], each=J), c( matrix( globalError, nrow=J) [, myObjects.unsortIndex ]))
+    
+    globalError.adj <- Lambda %*% sarTools.deviates( rho=rho[2], W=W,X=matrix(1,ncol=1,nrow=nrow(W)*J),Beta=0, Sigma=Sigma.list[[2]])
+    a$globalError.adj <- cbind( rep( a$neighbors[,1], each=J), c( matrix( globalError.adj, nrow=J) [, myObjects.unsortIndex ]))
 
     colnames(a$globalError) <- c('myObjects','error')
+    colnames(a$globalError.adj) <- c('myObjects','error')
   }
 
   # take care of Y 
@@ -428,7 +433,7 @@ sarTools.generateCropTypes <- function(a, p, rho, X, Beta, Sigma.list) {
   # if there is a global error available add it
   if(!is.null(a$globalError) ) {
     Y <- c(matrix( Y, nrow=J)[, myObjects.unsortIndex]) 
-    Y <- Y + a$globalError[,2] 
+    Y <- Y + a$globalError.adj[,2] 
   }
   Y <<- Y 
   # now we need to apply our rule to determine category

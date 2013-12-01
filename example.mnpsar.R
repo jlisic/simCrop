@@ -12,7 +12,7 @@ parPlot <- function(x ,myTitle.hist, myTitle.acf, myFile) {
 
 parPlot.crops <- function(a , myFile) {
   pdf(myFile)
-  par(mfrow=c(3,3))
+  par(mfrow=c(1,1))
   #plot( raster(a$globalError[ sort(a$globalError[,1],index=T)$ix,2]) )
   simCrop.plotCropTypes(a,newDev=F)
   dev.off()
@@ -47,7 +47,7 @@ Sigma.Annual <- matrix( c(1,0,0,1), nrow=2,byrow=T)
 Sigma.Environment <- matrix( c(1,0,0,1), nrow=2,byrow=T)
 
 # create a 2x2 section set of quarter-quarter sections (QQS)
-a <- simCrop.partitionPLSS(3,3)
+a <- simCrop.partitionPLSS(1,1)
 
 # add initial crop assignment
 a.init <- simCrop.generateCropTypes(a,p)
