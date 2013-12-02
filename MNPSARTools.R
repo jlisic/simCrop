@@ -181,6 +181,7 @@ sarTools.probitGibbsSpatialRunConditional <- function(
   # create U matrix  1_K \otimes (diag(n) \otimes 1_J)
   U <- kronecker(matrix(1,ncol=1,nrow=K),diag(n*J))
 
+U <<- U
 
   # static mu (zero) value for rho2
   mu2 <- matrix(0,ncol=1,nrow=n*J)
@@ -227,16 +228,39 @@ sarTools.probitGibbsSpatialRunConditional <- function(
 
       XX <- t(X) %*% S1.K.inv %*% X 
       UU <- t(U) %*% S1.K.inv %*%  U 
-      
+     
       ## 3. generate tau deviate
       #tau <- rgamma(1, shape = Gamma0[1] + n/2, rate= Gamma0[2] + t(V) %*% Sigma2.inv %*% V / 2 )
+      
+      ############################################################################
+      ## 5. generate deviates for the random effect latent variables
+      # L = Lambda1, O - Sigma1.inv
+      # M = Lambda2, A - Sigma2.inv
+      # t(z - L.inv xb - L.inv ua)LOL(z - L.inv xb - L.inv ua) + aMAMa
+      # V.var =  solve(  t(u)Ou + MAM   )
+      # V.mu = V.var.inv t(u) O ( L z - xb )  
+      ############################################################################
+      
+      Sigma2.cond <- solve(UU + Sigma2.inv )
+      muV <- Sigma2.cond %*% t(U) %*% S1.K.inv %*% (Lambda1.K %*% Z - X%*%Beta)
+      V <- matrix( rmvnorm(1, mean= muV, sigma=Sigma2.cond),  ncol=1)
 
+      
+#debug
+if( is.nan(mean(V)) ) {
+  V.save <- cbind(V.save,V)
+  return( list( Beta = Beta.save, Rho = rho.save, Sigma1 = Sigma1.save, Sigma2 = Sigma2.save, V = V.save, Z = Z.save) )
+} 
+
+
+      ############################################################################
       ## 4. generate new Beta
       # L = Lambda1, O - Sigma1.inv
       # B = Beta0
       # t(z - L.inv xb - L.inv ua)LOL(z - L.inv xb - L.inv ua) + t(B - b)S.inv(b-B) 
       # t(x) O x  + S.inv 
       # S.inv B + t(x) L.inv LOL( z - L.inv ua) = S.inv B + t(x) O ( L z - ua)
+      ############################################################################
 
       # variance of the posterior distribution of Beta
       Beta.post.var <- solve( S.inv + XX ) 
@@ -244,31 +268,26 @@ sarTools.probitGibbsSpatialRunConditional <- function(
       # mean of the posterior distribution of Beta
       Beta.post.mean <- Beta.post.var %*% ( t(X) %*% S1.K.inv %*% (Lambda1.K %*% Z - U%*%V)  + S.inv %*% Beta0)
       Beta <- matrix(rmvnorm(n=1,mean=Beta.post.mean,sigma=Beta.post.var),ncol=1)
-
-      ## 5. generate deviates for the random effect latent variables
-      # L = Lambda1, O - Sigma1.inv
-      # M = Lambda2, A - Sigma2.inv
-
-      # t(z - L.inv xb - L.inv ua)LOL(z - L.inv xb - L.inv ua) + aMAMa
-      # V.var =  solve( a( t(u)Ou + MAM ) a )
-      # V.mu = V.var.inv t( L z - xb ) O ua
-
-      Sigma2.cond <- solve(UU + Sigma2.inv )
-      #muV <- Sigma2.cond %*% t(U) %*%(Lambda1.K %*% Z - X%*%Beta)
-      muV <- Sigma2.cond %*% t(U) %*% S1.K.inv %*% (Lambda1.K %*% Z - X%*%Beta)
-      V <- matrix( rmvnorm(1, mean= muV, sigma=Sigma2.cond),  ncol=1)
-
-if( is.nan(mean(V)) ) {
-  return( list( Beta = Beta.save, Rho = rho.save,  Sigma1 = Sigma1.save, Sigma2 = Sigma2.save, V = V.save, Z = Z.save) )
-} 
+     
 
 
+      ############################################################################
       ## 6. generate deviates for the truncated latent variables
       muZ <- Lambda1.K.inv %*% (X %*% Beta + U %*% V)   
+      
+        Z <- matrix( rtmvnorm( n=1, mean=c(muZ),H=Sigma1.K.inv, lower=Y.lower, D=as.matrix(Y.constraints), algorithm="gibbs",burn.in.samples=m, ), ncol=1)
 
-      Z <- matrix( rtmvnorm( n=1, mean=c(muZ),H=Sigma1.K.inv, lower=Y.lower, D=as.matrix(Y.constraints), algorithm="gibbs",burn.in.samples=m), ncol=1)
-
+#debug
 if( is.nan(mean(Z)) ) {
+
+  muZ <<- muZ
+  Sigma1.K.inv <<- Sigma1.K.inv
+  Beta.sim <<- Beta
+  Beta.post.mean <<- Beta.post.mean
+  Beta.post.var <<- Beta.post.var
+
+  Beta.save[i - burnIn,] <- Beta  # save our result
+  Z.save <- cbind(Z.save,Z)
   return( list( Beta = Beta.save, Rho = rho.save,  Sigma1 = Sigma1.save, Sigma2 = Sigma2.save, V = V.save, Z = Z.save) )
 } 
 
@@ -420,6 +439,7 @@ sarTools.generateCropTypes <- function(a, p, rho, X, Beta, Sigma.list) {
     a$globalError <- cbind( rep( a$neighbors[,1], each=J), c( matrix( globalError, nrow=J) [, myObjects.unsortIndex ]))
     
     globalError.adj <- Lambda %*% sarTools.deviates( rho=rho[2], W=W,X=matrix(1,ncol=1,nrow=nrow(W)*J),Beta=0, Sigma=Sigma.list[[2]])
+    globalError.adj <<- globalError.adj 
     a$globalError.adj <- cbind( rep( a$neighbors[,1], each=J), c( matrix( globalError.adj, nrow=J) [, myObjects.unsortIndex ]))
 
     colnames(a$globalError) <- c('myObjects','error')
@@ -442,6 +462,25 @@ sarTools.generateCropTypes <- function(a, p, rho, X, Beta, Sigma.list) {
 
   return(a)
 }
+
+
+
+sortCrop <- function( Z, a) {
+
+  myObjects <- a$cropType[,'myObjects']
+  object.sort <- sort(myObjects,index.return=T)$ix
+  
+  J <- length(a$crops) - 1
+  n <- length(object.sort)
+
+  Z <- matrix( t(Z), ncol=n )[,object.sort]
+  Z <- t( matrix( Z, ncol=n*J ))
+  Z <- matrix( Z, ncol=1)
+
+  return( Z )
+}
+
+
 
 
 

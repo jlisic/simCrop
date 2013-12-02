@@ -33,12 +33,12 @@ J <- length(p) - 1
 
 # parameters 
 rho <- c(-.15,.20)
-Beta.sim.corn  <- -1 
-Beta.sim.soy   <- 2 
-Beta.sim.other <- 1 
+Beta.sim.corn  <- 1.5 
+Beta.sim.soy   <- -1.5 
+Beta.sim.other <- -0.5 
 Beta <- matrix( c( Beta.sim.corn, Beta.sim.soy, Beta.sim.other ),ncol=1)
 
-iter <- 30 
+iter <- 5000 
 thinning <- 20
 burnIn <- 0 
 m <- 10 
@@ -47,7 +47,7 @@ Sigma.Annual <- matrix( c(1,0,0,1), nrow=2,byrow=T)
 Sigma.Environment <- matrix( c(1,0,0,1), nrow=2,byrow=T)
 
 # create a 2x2 section set of quarter-quarter sections (QQS)
-a <- simCrop.partitionPLSS(1,1)
+a <- simCrop.partitionPLSS(3,3)
 
 # add initial crop assignment
 a.init <- simCrop.generateCropTypes(a,p)
@@ -57,7 +57,7 @@ W <- simCrop.createRookDist(a.init)
 # simulate 10 years of data
 
 a.crops <- sarTools.generateCropTypes(a.init, rho=rho, Beta=Beta, Sigma.list= list(Sigma.Annual, Sigma.Environment) ) 
-for(i in 2:5) {
+for(i in 2:2) {
   a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, Beta=Beta, Sigma.list=list(Sigma.Annual) ) 
 }
 
@@ -66,29 +66,26 @@ for(i in 2:5) {
 myObjects <- a.crops$cropType[,'myObjects']
 object.sort <- sort(myObjects,index.return=T)$ix
 
-Z <- matrix( t(a.crops$cropValue), ncol=length(object.sort) )[,object.sort]
-Z <- t( matrix( Z, ncol=ncol(a.crops$cropValue)*J ) )
-Z <- matrix( Z, ncol=1)
-
-V <- matrix( a.crops$globalError[,'error'], ncol=length(object.sort) )[,object.sort]
-V <- matrix( V, ncol=1)
+Z <- sortCrop(a.crops$cropValue, a.crops)
+V <- sortCrop(a.crops$globalError.adj[,'error'], a.crops)
 
 V2 <- rep(V,length=length(Z))
 
-
-Z <- Z - V2
 
 #### inits
 ##Beta.init <- c(0,0)
 beta.init <- Beta 
 rho.init <- c( -.15, .20)
 Sigma.init <- list( Sigma.Annual, Sigma.Environment)
-alpha.init <- matrix(0,nrow=nrow(W)*minDim(Sigma.init[[2]]),ncol=1)
-Z.init <- matrix(0,nrow=nrow(W)*minDim(Sigma.init[[1]])*(ncol(a.crops$cropType) - 2),ncol=1)
-#
+#alpha.init <- matrix(0,nrow=nrow(W)*minDim(Sigma.init[[2]]),ncol=1)
+#Z.init <- matrix(0,nrow=nrow(W)*minDim(Sigma.init[[1]])*(ncol(a.crops$cropType) - 2),ncol=1)
+
+alpha.init <- V 
+Z.init <-  Z 
+
 #### hyper params
 Beta0 <- c(0,0,0) 
-Sigma0 <- c(2,2,2) 
+Sigma0 <- c(1,1,1) 
 Gamma0 <- c(1,1/2) # not likely to be used
 
 
