@@ -246,11 +246,6 @@ U <<- U
       V <- matrix( rmvnorm(1, mean= muV, sigma=Sigma2.cond),  ncol=1)
 
       
-#debug
-if( is.nan(mean(V)) ) {
-  V.save <- cbind(V.save,V)
-  return( list( Beta = Beta.save, Rho = rho.save, Sigma1 = Sigma1.save, Sigma2 = Sigma2.save, V = V.save, Z = Z.save) )
-} 
 
 
       ############################################################################
@@ -262,34 +257,31 @@ if( is.nan(mean(V)) ) {
       # S.inv B + t(x) L.inv LOL( z - L.inv ua) = S.inv B + t(x) O ( L z - ua)
       ############################################################################
 
+      
+
       # variance of the posterior distribution of Beta
       Beta.post.var <- solve( S.inv + XX ) 
      
       # mean of the posterior distribution of Beta
       Beta.post.mean <- Beta.post.var %*% ( t(X) %*% S1.K.inv %*% (Lambda1.K %*% Z - U%*%V)  + S.inv %*% Beta0)
-      Beta <- matrix(rmvnorm(n=1,mean=Beta.post.mean,sigma=Beta.post.var),ncol=1)
-     
 
+      # because occasionally we get location parameters that don't work out.
+      retryCount <- 0
+      while( TRUE ) {
+        Beta <- matrix(rmvnorm(n=1,mean=Beta.post.mean,sigma=Beta.post.var),ncol=1)
 
-      ############################################################################
-      ## 6. generate deviates for the truncated latent variables
-      muZ <- Lambda1.K.inv %*% (X %*% Beta + U %*% V)   
-      
+        ############################################################################
+        ## 6. generate deviates for the truncated latent variables
+        muZ <- Lambda1.K.inv %*% (X %*% Beta + U %*% V)   
         Z <- matrix( rtmvnorm( n=1, mean=c(muZ),H=Sigma1.K.inv, lower=Y.lower, D=as.matrix(Y.constraints), algorithm="gibbs",burn.in.samples=m, ), ncol=1)
 
-#debug
-if( is.nan(mean(Z)) ) {
+        if( !is.nan(sum(Z))) break
 
-  muZ <<- muZ
-  Sigma1.K.inv <<- Sigma1.K.inv
-  Beta.sim <<- Beta
-  Beta.post.mean <<- Beta.post.mean
-  Beta.post.var <<- Beta.post.var
+        retryCount <- retryCount + 1
+      }
+      if(retryCount > 1) print( sprintf("retryCount = %d", retryCount))
 
-  Beta.save[i - burnIn,] <- Beta  # save our result
-  Z.save <- cbind(Z.save,Z)
-  return( list( Beta = Beta.save, Rho = rho.save,  Sigma1 = Sigma1.save, Sigma2 = Sigma2.save, V = V.save, Z = Z.save) )
-} 
+
 
     } # finish thinning 
     Beta.save[i - burnIn,] <- Beta  # save our result

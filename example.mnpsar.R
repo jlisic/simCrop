@@ -47,7 +47,7 @@ Sigma.Annual <- matrix( c(1,0,0,1), nrow=2,byrow=T)
 Sigma.Environment <- matrix( c(1,0,0,1), nrow=2,byrow=T)
 
 # create a 2x2 section set of quarter-quarter sections (QQS)
-a <- simCrop.partitionPLSS(3,3)
+a <- simCrop.partitionPLSS(1,1)
 
 # add initial crop assignment
 a.init <- simCrop.generateCropTypes(a,p)
@@ -57,7 +57,7 @@ W <- simCrop.createRookDist(a.init)
 # simulate 10 years of data
 
 a.crops <- sarTools.generateCropTypes(a.init, rho=rho, Beta=Beta, Sigma.list= list(Sigma.Annual, Sigma.Environment) ) 
-for(i in 2:2) {
+for(i in 2:3) {
   a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, Beta=Beta, Sigma.list=list(Sigma.Annual) ) 
 }
 
@@ -85,7 +85,7 @@ Z.init <-  Z
 
 #### hyper params
 Beta0 <- c(0,0,0) 
-Sigma0 <- c(1,1,1) 
+Sigma0 <- c(10,10,10) 
 Gamma0 <- c(1,1/2) # not likely to be used
 
 
