@@ -125,11 +125,11 @@ sarTools.probitGibbsSpatialRunConditional <- function(
   rho.init,
   Z.init,
   alpha.init,
-  Sigma.init, # list
 #hyper parameters
   Beta0,
   Sigma0,
-  Gamma0,
+  Wishart0.Z,
+  Wishart0.alpha,
 #runtime parameters
   iter,
   m,
@@ -149,8 +149,6 @@ sarTools.probitGibbsSpatialRunConditional <- function(
   Beta <- beta.init
   rho1 <- rho.init[1]
   rho2 <- rho.init[2] 
-  Sigma1 <- Sigma.init[[1]]
-  Sigma2 <- Sigma.init[[2]]
   Z <- Z.init
   V <- alpha.init
 
@@ -171,8 +169,8 @@ sarTools.probitGibbsSpatialRunConditional <- function(
   # things to save
   Beta.save <- matrix(0,nrow=iter,ncol=length(Beta))  # Beta values
   rho.save <- matrix(0,nrow=iter,ncol=2)              # rho values
-  Sigma1.save <- matrix(0,nrow=iter,ncol=length(Sigma1))                # proportion parameter for variances
-  Sigma2.save <- matrix(0,nrow=iter,ncol=length(Sigma2))                # proportion parameter for variances
+  Sigma1.inv.save <- matrix(0,nrow=iter,ncol=J^2)                # proportion parameter for variances
+  Sigma2.inv.save <- matrix(0,nrow=iter,ncol=J^2)                # proportion parameter for variances
   V.save <- c()
   Z.save <- c()
 
@@ -181,13 +179,21 @@ sarTools.probitGibbsSpatialRunConditional <- function(
   # create U matrix  1_K \otimes (diag(n) \otimes 1_J)
   U <- kronecker(matrix(1,ncol=1,nrow=K),diag(n*J))
 
-U <<- U
-
   # static mu (zero) value for rho2
   mu2 <- matrix(0,ncol=1,nrow=n*J)
 
   # inverse of the prior variance
   S.inv <- diag( c(1/Sigma0^2) )
+
+  # Create initial value for Sigma2.inv  
+  Wishart0.Z.inv <- solve(Wishart0.Z[[2]])
+  Wishart0.alpha.inv <- solve(Wishart0.alpha[[2]])
+      
+  # update rho step 
+  Lambda1 <- kronecker( diag(n) - rho1 * W, diag(J))
+  Lambda2 <- kronecker( diag(n) - rho2 * W, diag(J)) 
+  Lambda1.K <- kronecker(diag(K), Lambda1)
+
   last.time <- proc.time()
      
 
@@ -201,73 +207,79 @@ U <<- U
     }
 
     for(l in 1:thinning) {
-
-      ## 1. generate rho1 deviate
-      mu <- X %*% Beta + U%*%V
-      #rho1 <- mh.lambda.sar(Z=Z,W=W,mu=mu,tau=1,x0=rho1,iter=1,burnIn=25,rho.range=rho.range)
-
-      ## 2. generate rho2 deviate
-      #rho2 <- mh.lambda.sar(Z=V,W=W,mu=mu2,tau=tau,x0=rho2,iter=1,burnIn=25,rho.range=rho.range)
-   
-      # update step 
-      Lambda1 <- kronecker( diag(n) - rho1 * W, diag(J))
-      Lambda2 <- kronecker( diag(n) - rho2 * W, diag(J)) 
-
-      S1.inv <- kronecker( diag(n), solve(Sigma1) )
-      S2.inv <- kronecker( diag(n), solve(Sigma2) )
-
-      S1.K.inv <- kronecker( diag(K), S1.inv ) 
-
-      Sigma1.inv <- Lambda1 %*% S1.inv %*% Lambda1 
-      Sigma2.inv <- Lambda2 %*% S2.inv %*% Lambda2
-      
-      Lambda1.K <- kronecker(diag(K), Lambda1)
-      Lambda1.K.inv <- kronecker(diag(K), solve(Lambda1)) 
-      Sigma1.K.inv <- kronecker(diag(K), Sigma1.inv) 
- 
-
-      XX <- t(X) %*% S1.K.inv %*% X 
-      UU <- t(U) %*% S1.K.inv %*%  U 
-     
-      ## 3. generate tau deviate
-      #tau <- rgamma(1, shape = Gamma0[1] + n/2, rate= Gamma0[2] + t(V) %*% Sigma2.inv %*% V / 2 )
-      
-      ############################################################################
-      ## 5. generate deviates for the random effect latent variables
-      # L = Lambda1, O - Sigma1.inv
-      # M = Lambda2, A - Sigma2.inv
-      # t(z - L.inv xb - L.inv ua)LOL(z - L.inv xb - L.inv ua) + aMAMa
-      # V.var =  solve(  t(u)Ou + MAM   )
-      # V.mu = V.var.inv t(u) O ( L z - xb )  
-      ############################################################################
-      
-      Sigma2.cond <- solve(UU + Sigma2.inv )
-      muV <- Sigma2.cond %*% t(U) %*% S1.K.inv %*% (Lambda1.K %*% Z - X%*%Beta)
-      V <- matrix( rmvnorm(1, mean= muV, sigma=Sigma2.cond),  ncol=1)
-
-      
-
-
-      ############################################################################
-      ## 4. generate new Beta
-      # L = Lambda1, O - Sigma1.inv
-      # B = Beta0
-      # t(z - L.inv xb - L.inv ua)LOL(z - L.inv xb - L.inv ua) + t(B - b)S.inv(b-B) 
-      # t(x) O x  + S.inv 
-      # S.inv B + t(x) L.inv LOL( z - L.inv ua) = S.inv B + t(x) O ( L z - ua)
-      ############################################################################
-
-      
-
-      # variance of the posterior distribution of Beta
-      Beta.post.var <- solve( S.inv + XX ) 
-     
-      # mean of the posterior distribution of Beta
-      Beta.post.mean <- Beta.post.var %*% ( t(X) %*% S1.K.inv %*% (Lambda1.K %*% Z - U%*%V)  + S.inv %*% Beta0)
-
       # because occasionally we get location parameters that don't work out.
       retryCount <- 0
       while( TRUE ) {
+      
+        ## 3. generate Sigma2.inv deviate
+        V.alt <- matrix(Lambda2 %*% V, nrow=J)
+        Sigma2.inv <- rWishart(1 , n + Wishart0.alpha[[1]], solve( V.alt %*% t(V.alt) + Wishart0.alpha.inv ))[,,1] 
+  
+        ##tmp
+        mu <- X %*% Beta + U%*%V
+        Z.alt <- matrix(Lambda1.K %*%Z - mu, nrow=J)
+        Z.alt <<- Z.alt
+        Wishart0.Z.inv <<- Wishart0.Z.inv
+        Sigma1.inv <- rWishart.control(N + Wishart0.Z[[1]], solve( Wishart0.Z.inv + Z.alt %*% t(Z.alt) ))  
+  
+        # update the variance 
+        S1.inv <- kronecker( diag(n), Sigma1.inv )
+        S2.inv <- kronecker( diag(n), Sigma2.inv )
+        S1.K.inv <- kronecker( diag(K), S1.inv ) 
+        XX <- t(X) %*% S1.K.inv %*% X 
+        UU <- t(U) %*% S1.K.inv %*%  U 
+  
+        ## 1. generate rho1 deviate
+        rho1 <- mh.lambda.mnpsar(Z=Z,W=W,mu=mu,Sigma=Sigma1.inv,x0=rho1,iter=1,burnIn=50,rho.range=rho.range)
+  
+        ## 2. generate rho2 deviate
+        rho2 <- mh.lambda.mnpsar(Z=V,W=W,mu=mu2,Sigma=Sigma2.inv,x0=rho2,iter=1,burnIn=25,rho.range=rho.range)
+     
+        # update rho step 
+        Lambda1 <- kronecker( diag(n) - rho1 * W, diag(J))
+        Lambda2 <- kronecker( diag(n) - rho2 * W, diag(J)) 
+  
+        LH1L <- Lambda1 %*% S1.inv %*% Lambda1 
+        LH2L <- Lambda2 %*% S2.inv %*% Lambda2
+        
+        Lambda1.K <- kronecker(diag(K), Lambda1)
+        Lambda1.K.inv <- kronecker(diag(K), solve(Lambda1)) 
+        Sigma1.K.inv <- kronecker(diag(K), LH1L) 
+   
+        
+        ############################################################################
+        ## 5. generate deviates for the random effect latent variables
+        # L = Lambda1, O - Sigma1.inv
+        # M = Lambda2, A - Sigma2.inv
+        # t(z - L.inv xb - L.inv ua)LOL(z - L.inv xb - L.inv ua) + aMAMa
+        # V.var =  solve(  t(u)Ou + MAM   )
+        # V.mu = V.var.inv t(u) O ( L z - xb )  
+        ############################################################################
+        
+        Sigma2.cond <- solve(UU + LH2L )
+        muV <- Sigma2.cond %*% t(U) %*% S1.K.inv %*% (Lambda1.K %*% Z - X%*%Beta)
+        V <- matrix( rmvnorm(1, mean= muV, sigma=Sigma2.cond),  ncol=1)
+  
+        
+  
+  
+        ############################################################################
+        ## 4. generate new Beta
+        # L = Lambda1, O - Sigma1.inv
+        # B = Beta0
+        # t(z - L.inv xb - L.inv ua)LOL(z - L.inv xb - L.inv ua) + t(B - b)S.inv(b-B) 
+        # t(x) O x  + S.inv 
+        # S.inv B + t(x) L.inv LOL( z - L.inv ua) = S.inv B + t(x) O ( L z - ua)
+        ############################################################################
+  
+        
+  
+        # variance of the posterior distribution of Beta
+        Beta.post.var <- solve( S.inv + XX ) 
+       
+        # mean of the posterior distribution of Beta
+        Beta.post.mean <- Beta.post.var %*% ( t(X) %*% S1.K.inv %*% (Lambda1.K %*% Z - U%*%V)  + S.inv %*% Beta0)
+
         Beta <- matrix(rmvnorm(n=1,mean=Beta.post.mean,sigma=Beta.post.var),ncol=1)
 
         ############################################################################
@@ -275,7 +287,15 @@ U <<- U
         muZ <- Lambda1.K.inv %*% (X %*% Beta + U %*% V)   
         Z <- matrix( rtmvnorm( n=1, mean=c(muZ),H=Sigma1.K.inv, lower=Y.lower, D=as.matrix(Y.constraints), algorithm="gibbs",burn.in.samples=m, ), ncol=1)
 
-        if( !is.nan(sum(Z))) break
+        if( !is.nan(sum(Z))) {
+          break
+        } else {
+          if( i == 1 ) {
+            Z <- Z.init
+          } else {
+            Z <- Z.save[,i-1]
+          }
+        }
 
         retryCount <- retryCount + 1
       }
@@ -287,13 +307,13 @@ U <<- U
     Beta.save[i - burnIn,] <- Beta  # save our result
     rho.save[i -  burnIn,1] <- rho1
     rho.save[i -  burnIn,2] <- rho2 
-    Sigma1.save[i -  burnIn,] <- Sigma1 
-    Sigma2.save[i -  burnIn,] <- Sigma2 
+    Sigma1.inv.save[i -  burnIn,] <- Sigma1.inv 
+    Sigma2.inv.save[i -  burnIn,] <- Sigma2.inv 
     V.save <- cbind(V.save,V)
     Z.save <- cbind(Z.save,Z)
   } # finish iteration
 
-  return( list( Beta = Beta.save, Rho = rho.save,  Sigma1 = Sigma1.save, Sigma2 = Sigma2.save, V = V.save, Z = Z.save) )
+  return( list( Beta = Beta.save, Rho = rho.save,  Sigma1.inv = Sigma1.inv.save, Sigma2.inv = Sigma2.inv.save, V = V.save, Z = Z.save) )
 }
 
 
@@ -592,6 +612,31 @@ logpdf.sar <- function(rho,Z,W,Beta,q.value) {
 }
 
 
+# generate a single wishart deviate under the constraint that the first diagonal element is 1
+rWishart.control <- function(v, V) {
+  p <- minDim(V) 
+
+  L <- t(chol(V)) 
+
+  A <- matrix(0,nrow=p,ncol=p)
+  A[1,1] <- 1/L[1,1]
+  
+  i <- 2 
+  while( i <= p ) {
+  
+    A[i,i] <- sqrt(rchisq(1, v + 1 - i)) 
+  
+    j <- 1 
+    while( j < p ) {
+      A[i,j] <-rnorm(1)
+      j = j + 1
+    }
+  
+    i = i + 1
+  }
+  
+  return( L %*% A %*% t(A) %*% t(L) )
+}
   
 
 

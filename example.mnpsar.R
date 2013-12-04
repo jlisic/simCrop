@@ -38,10 +38,10 @@ Beta.sim.soy   <- -1.5
 Beta.sim.other <- -0.5 
 Beta <- matrix( c( Beta.sim.corn, Beta.sim.soy, Beta.sim.other ),ncol=1)
 
-iter <- 5000 
-thinning <- 20
+iter <- 2500 
+thinning <- 30
 burnIn <- 0 
-m <- 10 
+m <- 20 
 
 Sigma.Annual <- matrix( c(1,0,0,1), nrow=2,byrow=T)
 Sigma.Environment <- matrix( c(1,0,0,1), nrow=2,byrow=T)
@@ -57,7 +57,7 @@ W <- simCrop.createRookDist(a.init)
 # simulate 10 years of data
 
 a.crops <- sarTools.generateCropTypes(a.init, rho=rho, Beta=Beta, Sigma.list= list(Sigma.Annual, Sigma.Environment) ) 
-for(i in 2:3) {
+for(i in 2:10) {
   a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, Beta=Beta, Sigma.list=list(Sigma.Annual) ) 
 }
 
@@ -77,8 +77,6 @@ V2 <- rep(V,length=length(Z))
 beta.init <- Beta 
 rho.init <- c( -.15, .20)
 Sigma.init <- list( Sigma.Annual, Sigma.Environment)
-#alpha.init <- matrix(0,nrow=nrow(W)*minDim(Sigma.init[[2]]),ncol=1)
-#Z.init <- matrix(0,nrow=nrow(W)*minDim(Sigma.init[[1]])*(ncol(a.crops$cropType) - 2),ncol=1)
 
 alpha.init <- V 
 Z.init <-  Z 
@@ -86,7 +84,8 @@ Z.init <-  Z
 #### hyper params
 Beta0 <- c(0,0,0) 
 Sigma0 <- c(10,10,10) 
-Gamma0 <- c(1,1/2) # not likely to be used
+Wishart0 <- list(1,diag(2)) 
+
 
 
 #
@@ -99,12 +98,12 @@ result <- sarTools.probitGibbsSpatial(
   rho.init=rho.init,
   Z.init=Z.init,
   alpha.init=alpha.init,
-  Sigma.init=Sigma.init,
 
 ##hyper parameters
   Beta0=Beta0,
   Sigma0=Sigma0,
-  Gamma0=Gamma0, # shape and rate
+  Wishart0.Z=Wishart0, # shape and rate
+  Wishart0.alpha=Wishart0, # shape and rate
 ##runtime params
   iter=iter,
   m=m,         # thinning for Y
@@ -113,7 +112,8 @@ result <- sarTools.probitGibbsSpatial(
   )
 
 print( colMeans(result$Beta))
-#print( colMeans(result$Rho))
-#print( colMeans(result$Tau))
+print( colMeans(result$Rho))
+print( colMeans(result$Sigma1))
+print( colMeans(result$Sigma2))
 }
 #

@@ -116,6 +116,62 @@ mh.lambda.sar <- function(Z,W,mu,tau,x0,iter,burnIn=50, rho.range) {
   return( results )
 }
 
+
+mh.lambda.mnpsar <- function(Z,W,mu,Sigma.inv,x0,iter,burnIn=50, rho.range) {
+    
+  n <- nrow(W)
+  J <- sqrt( length(Sigma.inv) )
+  K <- nrow(Z)/(n*J)
+
+  results <- 1:iter
+
+  H <- kronecker( diag(n), Sigma.inv)
+
+  x <- x0
+  Lambda.x <- kronecker(diag(n) - x * W, diag(J))
+  Lambda.x.det <- det(Lambda.x)
+  
+  Z <- matrix(Z,nrow=n*J)
+  mu <- matrix(mu,nrow=n*J)
+  
+  # t(LZ - mu) H (LZ - mu)  
+  Z.adj.x <- Lambda.x %*% Z - mu 
+
+  # iterations for metropolis hastings algorithm
+  for(i in 1:(iter + burnIn) ) {
+    y <- runif(1, min=rho.range[1],max=rho.range[2]) 
+    Lambda.y <- kronecker(diag(n) - y * W, Sigma.inv)
+    Lambda.y.det <- det(Lambda.y)
+    Z.adj.y <- Lambda.y %*% Z - mu 
+ 
+    u <- runif(1)
+
+    #rho <- min( foo(y) /  foo(x), 1 ) 
+    det.ratio <- Lambda.y.det / Lambda.x.det #recall that H is constant 
+    rho2 <- det.ratio * exp( -1/2 * sum( Z.adj.y* (H%*%Z.adj.y)  - Z.adj.x*(H%*%Z.adj.x) ) )  
+      
+    if( is.nan(rho2) ) { 
+      acceptNewProb <- 0
+      acceptNewProb <- min( rho2, 1 )
+    } else {
+      acceptNewProb <- min( rho2, 1 )
+    }
+
+    if (u < acceptNewProb ) {
+      x <- y
+      Lambda.x <- Lambda.y
+      Lambda.x.det <- Lambda.y.det
+      Z.adj.x <- Z.adj.y
+    }
+
+
+    if( i > burnIn) results[i - burnIn] <- x
+  }
+
+  return( results )
+}
+
+
 # this function performs mh sampler on either rho1 or rho2, 
 mh.q.sar <- function(rho,Z,W,Beta,q.value,iter,burnIn=50, rho.range) {
     
