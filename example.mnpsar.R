@@ -56,40 +56,40 @@ W <- simCrop.createRookDist(a.init)
 
 # simulate 10 years of data
 
-a.crops <- sarTools.generateCropTypes(a.init, rho=rho, Beta=Beta, Sigma.list= list(Sigma.Annual, Sigma.Environment) ) 
-for(i in 2:10) {
-  a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, Beta=Beta, Sigma.list=list(Sigma.Annual) ) 
-}
-
-
-## useful for debugging
-myObjects <- a.crops$cropType[,'myObjects']
-object.sort <- sort(myObjects,index.return=T)$ix
-
-Z <- sortCrop(a.crops$cropValue, a.crops)
-V <- sortCrop(a.crops$globalError.adj[,'error'], a.crops)
-
-V2 <- rep(V,length=length(Z))
-
-
-#### inits
-##Beta.init <- c(0,0)
-beta.init <- Beta 
-rho.init <- c( -.15, .20)
-Sigma.init <- list( Sigma.Annual, Sigma.Environment)
-
-alpha.init <- V 
-Z.init <-  Z 
-
-#### hyper params
-Beta0 <- c(0,0,0) 
-Sigma0 <- c(10,10,10) 
-Wishart0 <- list(1,diag(2)) 
+#a.crops <- sarTools.generateCropTypes(a.init, rho=rho, Beta=Beta, Sigma.list= list(Sigma.Annual, Sigma.Environment) ) 
+#for(i in 2:10) {
+#  a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, Beta=Beta, Sigma.list=list(Sigma.Annual) ) 
+#}
+#
+#
+### useful for debugging
+#myObjects <- a.crops$cropType[,'myObjects']
+#object.sort <- sort(myObjects,index.return=T)$ix
+#
+#Z <- sortCrop(a.crops$cropValue, a.crops)
+#V <- sortCrop(a.crops$globalError.adj[,'error'], a.crops)
+#
+#V2 <- rep(V,length=length(Z))
+#
+#
+##### inits
+###Beta.init <- c(0,0)
+#beta.init <- Beta 
+#rho.init <- c( -.15, .20)
+#Sigma.init <- list( Sigma.Annual, Sigma.Environment)
+#
+#alpha.init <- V 
+#Z.init <-  Z 
+#
+##### hyper params
+#Beta0 <- c(0,0,0) 
+#Sigma0 <- c(10,10,10) 
+#Wishart0 <- list(1,diag(2)) 
 
 
 
 #
-if ( T ) {
+if ( F ) {
 result <- sarTools.probitGibbsSpatial( 
   a.crops, 
   fun=sarTools.probitGibbsSpatialRunConditional,

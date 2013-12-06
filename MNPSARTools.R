@@ -421,14 +421,7 @@ sarTools.generateCropTypes <- function(a, p, rho, X, Beta, Sigma.list) {
   # get the number of years
   years <- ncol(a$cropType) - 1 
 
-  # W is sorted by object, so we need to sort our input by object
-  myObjects <- a$map[,'object']
-  myObjects.sortIndex <- sort( myObjects, index.return=T)
-  myObjects.sort <-myObjects.sortIndex$x
-  myObjects.sortIndex <-myObjects.sortIndex$ix
-
-  # this gives us a way to un-sort the result
-  myObjects.unsortIndex <- sort(myObjects.sortIndex, index.return=T)$ix
+  Z <- sortCrop(a.crops$cropValue, a)
 
   priorState <- sarTools.priorStateDesignMatrix(a,priorYear=years)
 
@@ -482,16 +475,37 @@ sortCrop <- function( Z, a) {
   myObjects <- a$cropType[,'myObjects']
   object.sort <- sort(myObjects,index.return=T)$ix
   
-  J <- length(a$crops) - 1
+  cols <- minDim(Z) 
+  rows <- length(Z) / cols 
   n <- length(object.sort)
 
-  Z <- matrix( t(Z), ncol=n )[,object.sort]
-  Z <- t( matrix( Z, ncol=n*J ))
-  Z <- matrix( Z, ncol=1)
+  Z <- matrix( t(Z), ncol=n )[,object.sort] # it's sorted here 
+
+  # now we need to get it back to the original shape
+  Z <- t( matrix( Z, nrow=cols ))
 
   return( Z )
 }
 
+unsortCrop <- function( Z, a) {
+
+  myObjects <- a$cropType[,'myObjects']
+  object.sort <- sort(myObjects,index.return=T)$ix
+ 
+  1:length(myObjects) 
+
+  
+  cols <- minDim(Z) 
+  rows <- length(Z) / cols 
+  n <- length(object.sort)
+
+  Z <- matrix( t(Z), ncol=n )[,object.sort] # it's sorted here 
+
+  # now we need to get it back to the original shape
+  Z <- t( matrix( Z, nrow=cols ))
+
+  return( Z )
+}
 
 
 
