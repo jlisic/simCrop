@@ -25,26 +25,37 @@ parPlot.crops <- function(a , myFile) {
 # 1. corn
 # 2. soybeans
 
-set.seed(400)
+set.seed(800)
 
 # ratio of corn and soybeans
 p <- c(.4, .4, .2)
 J <- length(p) - 1
+K <- 20 
 
 # parameters 
 rho <- c(-.15,.20)
-Beta.sim.corn  <- 1.5 
-Beta.sim.soy   <- -1.5 
-Beta.sim.other <- -0.5 
-Beta <- matrix( c( Beta.sim.corn, Beta.sim.soy, Beta.sim.other ),ncol=1)
+Beta1.sim.corn  <- 1 
+Beta2.sim.corn  <- 1 
+Beta1.sim.soy   <- -1 
+Beta2.sim.soy   <- -1 
+Beta1.sim.other <- -0.5 
+Beta2.sim.other <- -0.5 
+Beta <- matrix( c( 
+                  Beta1.sim.corn, 
+                  Beta2.sim.corn, 
+                  Beta1.sim.soy, 
+                  Beta2.sim.soy, 
+                  Beta1.sim.other,
+                  Beta2.sim.other
+                  ),ncol=1)
 
-iter <- 2500 
+iter <- 10000 
 thinning <- 30
 burnIn <- 0 
 m <- 20 
 
 Sigma.Annual <- matrix( c(1,0,0,1), nrow=2,byrow=T)
-Sigma.Environment <- matrix( c(1,0,0,1), nrow=2,byrow=T)
+Sigma.Environment <- matrix( c(1,0,0,1)/10, nrow=2,byrow=T)
 
 # create a 2x2 section set of quarter-quarter sections (QQS)
 a <- simCrop.partitionPLSS(1,1)
@@ -56,40 +67,49 @@ W <- simCrop.createRookDist(a.init)
 
 # simulate 10 years of data
 
-#a.crops <- sarTools.generateCropTypes(a.init, rho=rho, Beta=Beta, Sigma.list= list(Sigma.Annual, Sigma.Environment) ) 
-#for(i in 2:10) {
-#  a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, Beta=Beta, Sigma.list=list(Sigma.Annual) ) 
-#}
-#
-#
+a.crops <- sarTools.generateCropTypes(a.init, rho=rho, Beta=Beta, Sigma.list= list(Sigma.Annual, Sigma.Environment) ) 
+for(i in 2:K) {
+  a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, Beta=Beta, Sigma.list=list(Sigma.Annual) ) 
+}
+
+
 ### useful for debugging
-#myObjects <- a.crops$cropType[,'myObjects']
-#object.sort <- sort(myObjects,index.return=T)$ix
-#
-#Z <- sortCrop(a.crops$cropValue, a.crops)
-#V <- sortCrop(a.crops$globalError.adj[,'error'], a.crops)
-#
-#V2 <- rep(V,length=length(Z))
-#
-#
+
+Z <- sortCrop(a.crops$cropValue, a.crops)
+V <- sortCrop(a.crops$globalError[,'error'], a.crops)
+n <- nrow(W)
+
+sarTools.probitGibbsSpatial( a.crops, function(...) {} ) 
+
+Lambda1 <- kronecker( diag(n) - rho[1] * W, diag(J))
+Lambda2 <- kronecker( diag(n) - rho[2] * W, diag(J)) 
+Lambda1.K <- kronecker( diag(K), Lambda1) 
+Lambda1.K.inv <- kronecker( diag(K), solve(Lambda1)) 
+  
+FullSigmaRoot <-  kronecker(diag(K), bdiag( rep( list( solve(Sigma.Annual) ), times=n) )) 
+
+Beta.hat <- solve( t(X) %*%FullSigmaRoot %*% X )  %*% 
+  t(X) %*% FullSigmaRoot %*% Lambda1.K %*% 
+  ( matrix(Z,ncol=1) - Lambda1.K.inv %*% kronecker( matrix(1,ncol=1,nrow=K), V) )  
+
+
 ##### inits
-###Beta.init <- c(0,0)
-#beta.init <- Beta 
-#rho.init <- c( -.15, .20)
-#Sigma.init <- list( Sigma.Annual, Sigma.Environment)
-#
-#alpha.init <- V 
-#Z.init <-  Z 
-#
+beta.init <- Beta 
+rho.init <- c( -.15, .20)
+Sigma.init <- list( Sigma.Annual, Sigma.Environment)
+
+alpha.init <- V 
+Z.init <-  matrix(Z,ncol=1)
+
 ##### hyper params
-#Beta0 <- c(0,0,0) 
-#Sigma0 <- c(10,10,10) 
-#Wishart0 <- list(1,diag(2)) 
+Beta0 <- c(0,0,0,0,0,0) 
+Sigma0 <- rep(10,times=6) 
+Wishart0 <- list(1,diag(2)) 
 
 
 
 #
-if ( F ) {
+if ( T ) {
 result <- sarTools.probitGibbsSpatial( 
   a.crops, 
   fun=sarTools.probitGibbsSpatialRunConditional,
@@ -115,5 +135,11 @@ print( colMeans(result$Beta))
 print( colMeans(result$Rho))
 print( colMeans(result$Sigma1))
 print( colMeans(result$Sigma2))
+
+par( mfrow=c(3,2) )
+for( i in 1:length(Beta) ) {
+  plot( result$Beta[,i],type='l',  main=sprintf("Beta %d",i ) )
+}
+
 }
 #
