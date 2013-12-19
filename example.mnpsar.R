@@ -49,7 +49,7 @@ Beta <- matrix( c(
                   Beta2.sim.other
                   ),ncol=1)
 
-iter <- 10000 
+iter <- 300 
 thinning <- 30
 burnIn <- 0 
 m <- 20 

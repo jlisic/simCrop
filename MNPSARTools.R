@@ -227,10 +227,10 @@ sarTools.probitGibbsSpatialRunConditional <- function(
         UU <- t(U) %*% S1.K.inv %*%  U 
   
         ## 1. generate rho1 deviate
-        rho1 <- mh.lambda.mnpsar(Z=Z,W=W,mu=mu,Sigma=Sigma1.inv,x0=rho1,iter=1,burnIn=50,rho.range=rho.range)
+        rho1 <- mh.lambda.mnpsar(Z=Z,W=W,mu=mu,Sigma=Sigma1.inv,x0=rho1,iter=1,burnIn=100,rho.range=rho.range)
   
         ## 2. generate rho2 deviate
-        rho2 <- mh.lambda.mnpsar(Z=V,W=W,mu=mu2,Sigma=Sigma2.inv,x0=rho2,iter=1,burnIn=25,rho.range=rho.range)
+        rho2 <- mh.lambda.mnpsar(Z=V,W=W,mu=mu2,Sigma=Sigma2.inv,x0=rho2,iter=1,burnIn=100,rho.range=rho.range)
      
         # update rho step 
         Lambda1 <- kronecker( diag(n) - rho1 * W, diag(J))
