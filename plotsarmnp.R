@@ -1,42 +1,53 @@
-# the goal here is to plot with SARMNP
-
-Beta <- c( 
-           1.0,  1.0,
-          -1.0, -1.0,
-           0.5,  0.5
-          )
-
-x <- rnorm(10)
-y <- rnorm(10)
-d <- round(runif(10) + runif(10)) + 1
-
-z <- c(t(cbind(x,y)))
-
-J <- 2
 
 
-#function ( Z, J, Beta ) {
+plotSARMNP <- function ( b, Beta=NULL, plotPoints=T,removeInitial=F ) {
+  require(MASS)
 
-  Z <- t(matrix(z,nrow=J))
-  Beta <- t(matrix(Beta,nrow=J))
+  J <- length(b$crops) - 1
+  Ncol <- ncol(b$cropValue)
 
-  n.beta <- length(Beta) / J
+  # get the values
+  Z <- t(matrix( b$cropValue[,-1], nrow=J) )
+ 
+  # get the transitions
+  if( removeInitial ) {
+    Y <- c( b$cropType[,c(-1,-2,-1*(Ncol+1))] )
+  } else {
+    Y <- c( b$cropType[,c(-1,-1*(Ncol+1))] )
+  }
 
-  par(mfrow=c(1,n.beta))
+  if( length(Z) != J*length(Y)) stop(sprintf("values and J * prior states do not match (%d,%d,%d)", length(Z), J, length(Y)))
 
-  for(k in 1:n.beta) { 
+  if( !is.null(Beta)) {
+   Beta <- t(matrix(Beta,nrow=J))
+   n.beta <- length(Beta) / J
+  }
 
-    Z <- matrix(z,ncol=J)
-    a.max <- max( abs(z) ) 
-    
+  par(mfrow=c(1,J+1))
+
+  for(k in 1:(J+1)) { 
+    a.max <- max( abs(c(Z)) ) 
+    x <- Z[Y==k,1]
+    y <- Z[Y==k,2]
+
+    if( !is.null(Beta) ) {
     plot(c(),
          xlim=c(-1 * a.max, a.max), 
          ylim=c(-1 * a.max, a.max),
-         main=sprintf("Beta = %d",k),
+         main=sprintf("J = %d, Beta = (%2.3f, %2.3f)", k, Beta[k,1], Beta[k,2] ), 
          xlab='x',
          ylab='y' 
          )
-    
+    } else {
+    plot(c(),
+         xlim=c(-1 * a.max, a.max), 
+         ylim=c(-1 * a.max, a.max),
+         main=sprintf("J = %d",k),
+         xlab='x',
+         ylab='y' 
+         )
+    } 
+
     # add polygons
     a <- matrix( 
            c(
@@ -53,13 +64,22 @@ J <- 2
     a <- matrix( c(-1 * a.max, 0, a.max,0),byrow=T,nrow=2)
     lines(a,col='red')
     lines(a[,c(2,1)],col='red')
-   
-    points(x,y)
+  
+    if( plotPoints ) points(x,y)
+
+
+    myDensity <- kde2d(x,y)
+    contour(myDensity,levels=(0:50)/50,add=T )
 
     # add beta
-    points(x=Beta[k,1], y=Beta[k,2], col="blue", pch=19, cex=3.0) 
-    text(x=Beta[k,1], y=Beta[k,2], col="blue", label=sprintf("Beta = (%2.3f, %2.3f)", Beta[k,1], Beta[k,2] ), cex=3.0,pos= ) 
+    if( !is.null(Beta)) {
+      points(x=Beta[k,1], y=Beta[k,2], col="blue", pch=19, cex=3.0) 
+    }
+
 
   }
 
-#}
+}
+
+
+

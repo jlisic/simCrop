@@ -1,6 +1,7 @@
 
 #library(RPostgreSQL)
 source('MNPSARTools.R')
+source('plotsarmnp.R')
 
 
 
@@ -34,6 +35,7 @@ calcMCMLE <- function( X, byRow=F ) {
       result[i - J] <- Y.table[ which( Y.table.names %in% i) ]
     }
   }
+
   
   result <- result / rowSums(result)
   colnames(result) <- unique.values 
@@ -65,7 +67,8 @@ generateCropDeviates <- function(
   Sigma.list,
   Rho,
   burnIn,
-  QQS.size
+  QQS.size,
+  densityPlot
   ) {
 
   # create a 2x2 section set of quarter-quarter sections (QQS)
@@ -87,6 +90,9 @@ generateCropDeviates <- function(
   regionMCMC <- calcMCMLE( a.crops$cropType[,-1] ) 
   
   parcelMCMC <- calcMCMLE( a.crops$cropType[,-1] ,byRow=T) 
+ 
+
+  if(densityPlot) plotSARMNP( a.crops, Beta=Beta, plotPoints=F,removeInitial=T ) 
 
   # subset result
   # here we take a subset of 
@@ -128,9 +134,9 @@ Sigma.Environment <- matrix( c(1,0,0,1)/10, nrow=2,byrow=T)
 
 Sigma.list <- list( Sigma.Annual, Sigma.Environment)
 
-QQS.size <- c(2,2)
+QQS.size <- c(1,1)
 
-burnIn <- 1000 
+burnIn <- 500 
 
 b <- generateCropDeviates(
   years,
@@ -139,7 +145,8 @@ b <- generateCropDeviates(
   Sigma.list,
   Rho,
   burnIn,
-  QQS.size
+  QQS.size,
+  densityPlot=T
   ) 
 
 print(b)
