@@ -380,13 +380,13 @@ sarTools.deviates <- function( rho, W, X, Beta, mu2, Sigma ) {
   }
 
   # sanity checks
-  FullSigmaRoot <-  bdiag( rep( list( solve(Sigma) ), times=n) ) 
-  Beta.hat <- solve( t(X) %*%FullSigmaRoot %*% X )  %*% t(X) %*% FullSigmaRoot %*% kronecker(Lambda,diag(J)) %*% ( Z - kronecker(Lambda.inv, diag(J)) %*% mu2 )  
-  print( sprintf( "LSE Beta="))
-  print(Beta.hat)
-  print( sprintf( "MLE Rho="))
-
-  print(optim( rho, sarCheck, Y=Z, W=W, X=X, Beta=Beta, H=FullSigmaRoot, lower=rhoRange[1] + 0.0001, upper=rhoRange[2] - 0.0001,method="Brent" )$par )
+#  FullSigmaRoot <-  bdiag( rep( list( solve(Sigma) ), times=n) ) 
+#  Beta.hat <- solve( t(X) %*%FullSigmaRoot %*% X )  %*% t(X) %*% FullSigmaRoot %*% kronecker(Lambda,diag(J)) %*% ( Z - kronecker(Lambda.inv, diag(J)) %*% mu2 )  
+#  print( sprintf( "LSE Beta="))
+#  print(Beta.hat)
+#  print( sprintf( "MLE Rho="))
+#
+#  print(optim( rho, sarCheck, Y=Z, W=W, X=X, Beta=Beta, H=FullSigmaRoot, lower=rhoRange[1] + 0.0001, upper=rhoRange[2] - 0.0001,method="Brent" )$par )
 
   return( Z ) 
 }
