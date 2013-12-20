@@ -194,6 +194,10 @@ sarTools.probitGibbsSpatialRunConditional <- function(
 #  Sigma1.inv <- diag(2)  
 #  Sigma2.inv <- diag(2)  
 
+  print(dim(Z))
+  print(dim(X))
+  print(dim(Lambda1.K))
+
   # the mcmc loop
   for(i in 1:(iter+burnIn) ) {
 
@@ -590,7 +594,7 @@ DMat <- function( J, j ) {
 applyGroup <- function( X, J ) {
    # create a matrix of True and Falses for which category the latent variable falls in
    X.category <- matrix( colSums(matrix(matrix(DMat(J) %*% matrix( X, nrow=J) > 0, nrow=J*(J+1) ),nrow=J)) == J, nrow=J+1)  
-   X.category <<- X.category
+   #X.category <<- X.category
    return( unlist( apply(X.category, 2, which) ))
 }
 

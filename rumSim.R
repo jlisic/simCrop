@@ -4,15 +4,8 @@ source('MNPSARTools.R')
 source('plotsarmnp.R')
 
 
-  table.nomiss <- function( x, cats ) {
-    y <- table(x)
-    y.cats <- rep(0,times=length(cats))
-    y.cats[ as.numeric(names(y)) ] <- y 
-    return( y.cats )
-  }
 
-
-calcMCMLE <- function( X, byRow=F, useBayes=F, unique.values ) {
+calcMCMLE <- function( X, byRow=F ) {
   
   r <- ncol(X)
   p <- nrow(X)
@@ -20,25 +13,15 @@ calcMCMLE <- function( X, byRow=F, useBayes=F, unique.values ) {
   if( is.null(r) ) stop("Insufficient Number of Columns")
   if( r < 2 ) stop("Insufficient Number of Columns")
 
-
-
   # fun with recursion  
   if( byRow ) {
     X.cols <- lapply( 1:p, function(x) return( matrix( X[x,],nrow=1)))
-    if( missing( unique.values) ) { 
-      return( lapply(X.cols, calcMCMLE, useBayes=useBayes) ) 
-    } else {
-      return( lapply(X.cols, calcMCMLE, useBayes=useBayes, unique.values=unique.values) ) 
-    }
+    return( lapply(X.cols, calcMCMLE) ) 
   }
-
-  # allow forcing values 
-  if( missing( unique.values) ) { 
-    unique.values <- sort(unique(c(X)))
-  } 
-    
+ 
+  unique.values <- sort(unique(c(X)))
   J <- length(unique.values)
-
+  
   result <- matrix(0,nrow=J,ncol=J)
 
   # convert the values in X to there order in unique.values
@@ -53,13 +36,8 @@ calcMCMLE <- function( X, byRow=F, useBayes=F, unique.values ) {
     }
   }
 
-  # use a non-informative prior
-  if( useBayes ) { 
-    result <- result + 1 / ( rowSums(result) + J ) 
-  } else {
-    result <- result / rowSums(result)
-  }
-
+  
+  result <- result / rowSums(result)
   colnames(result) <- unique.values 
   rownames(result) <- unique.values
 
@@ -90,8 +68,7 @@ generateCropDeviates <- function(
   Rho,
   burnIn,
   QQS.size,
-  densityPlot,
-  ratioPlot=F
+  densityPlot
   ) {
 
   # create a 2x2 section set of quarter-quarter sections (QQS)
@@ -110,23 +87,11 @@ generateCropDeviates <- function(
 
 
   # calculate full transition probabilities
-  regionMCMC <- calcMCMLE( a.crops$cropType[,-1], unique.values=a.crops$crops ) 
-  parcelMCMC <- calcMCMLE( a.crops$cropType[,-1] ,byRow=T,useBayes=T, unique.values=a.crops$crops) 
+  regionMCMC <- calcMCMLE( a.crops$cropType[,-1] ) 
+  
+  parcelMCMC <- calcMCMLE( a.crops$cropType[,-1] ,byRow=T) 
+ 
 
-  #get crop ratios
-
-  cropRatio <- t(apply(a.crops$cropType[,-1],2,table.nomiss, a.crops$crops))/nrow(a.crops$cropType)
-  rownames(cropRatio) <- 0:(nrow(cropRatio) - 1)
-
-  if( ratioPlot != F ) { 
-    pdf( file=ratioPlot )
-    plot(cropRatio[,2],type='o',col=1,ylim=c(0,1))
-    lines(cropRatio[,3],type='o',col=2)
-    lines(cropRatio[,1],type='o',col=3)
-    legend(1, legend=c(1:3), cex=0.8, col=c(1:3), pch=21:22, lty=1:2)
-    dev.off()
-  }
-  # create a density plot
   if(densityPlot) plotSARMNP( a.crops, Beta=Beta, plotPoints=F,removeInitial=T ) 
 
   # subset result
@@ -140,11 +105,48 @@ generateCropDeviates <- function(
   
   return(list(crops=a.crops,
               regionMCMC=regionMCMC,
-              parcelMCMC=parcelMCMC,
-              cropRatio=cropRatio
-              ))
+              parcelMCMC=parcelMCMC))
 }
 
 
 
 
+
+set.seed(800)
+
+# ratio of corn and soybeans
+p <- c(.4, .4, .2)
+years <-  5 
+
+# parameters 
+rho <- c(-.15,.20)
+
+Beta1.sim.corn  <- .5 
+Beta2.sim.corn  <- -0.5 
+Beta1.sim.soy   <- -1.5 
+Beta2.sim.soy   <- -1.5 
+Beta1.sim.other <- -0.5 
+Beta2.sim.other <- -0.5 
+Beta <- matrix( c( Beta1.sim.corn, Beta2.sim.corn, Beta1.sim.soy, Beta2.sim.soy, Beta1.sim.other, Beta2.sim.other),ncol=1)
+
+Sigma.Annual <- matrix( c(1,0,0,1), nrow=2,byrow=T)
+Sigma.Environment <- matrix( c(1,0,0,1)/10, nrow=2,byrow=T)
+
+Sigma.list <- list( Sigma.Annual, Sigma.Environment)
+
+QQS.size <- c(1,1)
+
+burnIn <- 500 
+
+b <- generateCropDeviates(
+  years,
+  init.p,
+  Beta,
+  Sigma.list,
+  Rho,
+  burnIn,
+  QQS.size,
+  densityPlot=T
+  ) 
+
+print(b)
