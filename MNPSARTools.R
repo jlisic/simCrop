@@ -12,9 +12,9 @@ library(mgcv)
 
 
 ########################################## INCLUDES ###############################################
-source('mh.R')
-source('simCrop.R')
-source('minDim.R')
+source('~/src/simCrop/mh.R')
+source('~/src/simCrop/simCrop.R')
+source('~/src/simCrop/minDim.R')
 
 ########################################## FUNCTION ###############################################
 
@@ -78,25 +78,41 @@ simSample <- function( m, theta) {
 # Y vector of categorical responses in row major form, repeating for each year, length = (number of years) x fieldSize
 # X matrix of covariates  in row major form, repeating for each year, length = (number of years) x fieldSize
 # W matrix in row major form of spatial neighborhoods, dim is fieldSize x fieldSize
-sarTools.probitGibbsSpatial <- function( a, fun, ... ) {
+sarTools.probitGibbsSpatial <- function( a, fun, dataType='sim', ... ) {
 
   # number of alternatives
   J <- length(a$crops) - 1
   # number of years
   priorYears <- ncol( a$cropType) - 2  
 
-  # take care of Y
-  Y <- matrix( sortCrop(a$cropType[,c(-1,-2)],a), ncol=1) 
+  # run on simulated data
+  if( dataType == 'sim' ) {
+    # take care of Y
+    Y <- matrix( sortCrop(a$cropType[,c(-1,-2)],a), ncol=1) 
+  
+    # take care of X
+    X <- sarTools.priorStateDesignMatrix(a,sortResult=T)
+    X <- kronecker( X, diag(J) )
+  
+    # take care of W  
+    W <- simCrop.createRookDist(a)
+  } else {
+  # run on real data
+
+    # take care of Y
+    Y <- matrix( apply( a$cropType[,c(-1,-2)], c(1,2), function(x) which( a$crops %in% x )) , ncol=1) 
+  
+    # take care of X
+    X <- sarTools.priorStateDesignMatrix(a,sortResult=F)
+    X <- kronecker( X, diag(J) )
+  
+    # take care of W  
+    W <- simCrop.createDist(a)
+  }
+
+  X <<- X
   Y <<- Y
 
-  # take care of X
-  X <- sarTools.priorStateDesignMatrix(a,sortResult=T)
-  X <<- X
-  X <- kronecker( X, diag(J) )
-  X <<- X
-
-  # take care of W  
-  W <- simCrop.createRookDist(a)
 
   # run the function
   result <- fun( Y=Y, states=a$crops, X=X, W=W, ... )
@@ -159,7 +175,6 @@ sarTools.probitGibbsSpatialRunConditional <- function(
   Y.lower <- rep(0,times=NJ) 
   Y.constraints <- bdiag(lapply( Y , function(x) DMat(J,x)))
 
-  Y.constraints <<- Y.constraints
 
   # things to save
   Beta.save <- matrix(0,nrow=iter,ncol=length(Beta))  # Beta values
