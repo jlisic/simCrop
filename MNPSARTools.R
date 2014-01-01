@@ -112,7 +112,8 @@ sarTools.probitGibbsSpatial <- function( a, fun, dataType='sim', ... ) {
 
   X <<- X
   Y <<- Y
-
+  W <<- W
+  states <<- a$crops 
 
   # run the function
   result <- fun( Y=Y, states=a$crops, X=X, W=W, ... )

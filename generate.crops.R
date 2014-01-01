@@ -84,7 +84,7 @@ calcMCMLE <- function( X, byRow=F, useBayes=F, unique.values ) {
 # Number of Quarter Sections
 generateCropDeviates <- function(
   years,
-  init.p,
+  p,
   Beta,
   Sigma.list,
   Rho,
@@ -103,9 +103,9 @@ generateCropDeviates <- function(
   W <- simCrop.createRookDist(a.init) 
   
   # simulate years of data
-  a.crops <- sarTools.generateCropTypes(a.init, rho=rho, Beta=Beta, Sigma.list= list(Sigma.Annual, Sigma.Environment) ) 
+  a.crops <- sarTools.generateCropTypes(a.init, rho=Rho, Beta=Beta, Sigma.list= list(Sigma.Annual, Sigma.Environment) ) 
   for(i in 1:(burnIn+years-1) ) {
-    a.crops <- sarTools.generateCropTypes(a.crops, rho=rho, Beta=Beta, Sigma.list=list(Sigma.Annual) ) 
+    a.crops <- sarTools.generateCropTypes(a.crops, rho=Rho, Beta=Beta, Sigma.list=list(Sigma.Annual) ) 
   }
 
 
